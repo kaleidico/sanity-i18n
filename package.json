@@ -1,0 +1,85 @@
+{
+  "name": "@kaleidico/sanity-i18n",
+  "version": "0.1.0",
+  "description": "Multi-language content for Sanity and Next.js sites: languages in Site Settings, linked translations, locale routing with proper SEO, and a context-aware translation engine",
+  "license": "MIT",
+  "author": "Kaleidico",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kaleidico/sanity-i18n.git"
+  },
+  "homepage": "https://github.com/kaleidico/sanity-i18n#readme",
+  "bugs": {
+    "url": "https://github.com/kaleidico/sanity-i18n/issues"
+  },
+  "keywords": [
+    "sanity",
+    "sanity-plugin",
+    "nextjs",
+    "i18n",
+    "localization",
+    "translation",
+    "multilingual"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    "./sanity": {
+      "types": "./dist/sanity/index.d.ts",
+      "import": "./dist/sanity/index.js",
+      "default": "./dist/sanity/index.js"
+    },
+    "./next": {
+      "types": "./dist/next/index.d.ts",
+      "import": "./dist/next/index.js",
+      "default": "./dist/next/index.js"
+    },
+    "./engine": {
+      "types": "./dist/engine/index.d.ts",
+      "import": "./dist/engine/index.js",
+      "default": "./dist/engine/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "sanity": ["./dist/sanity/index.d.ts"],
+      "next": ["./dist/next/index.d.ts"],
+      "engine": ["./dist/engine/index.d.ts"]
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test \"test/**/*.test.mjs\"",
+    "check": "node scripts/security-check.mjs",
+    "prepack": "npm run build && npm run check"
+  },
+  "peerDependencies": {
+    "next": "^15 || ^16",
+    "react": "^18 || ^19",
+    "sanity": "^5"
+  },
+  "peerDependenciesMeta": {
+    "next": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "next": "^16.2.0",
+    "react": "^19.2.0",
+    "sanity": "^5.14.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0"
+  }
+}
