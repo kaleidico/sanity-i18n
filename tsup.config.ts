@@ -1,21 +1,37 @@
 import { defineConfig } from "tsup";
 
-// Three entry points, one per subpath export. Each builds to ESM plus a
-// .d.ts next to it so `@kaleidico/sanity-i18n/sanity`, `/next` and `/engine`
-// resolve without a bundler step in the host.
-export default defineConfig({
-  entry: {
-    "sanity/index": "src/sanity/index.ts",
-    "next/index": "src/next/index.ts",
-    "engine/index": "src/engine/index.ts",
-  },
-  format: ["esm"],
+// Five entry points, one per subpath export. Each builds to ESM plus a .d.ts
+// next to it so `@kaleidico/sanity-i18n/sanity`, `/next`, `/next/middleware`,
+// `/next/client` and `/engine` resolve without a bundler step in the host. The client entry is
+// built on its own so it can carry the "use client" directive.
+const shared = {
+  format: ["esm"] as const,
   dts: true,
   sourcemap: true,
-  clean: true,
   splitting: false,
   treeshake: true,
-  target: "es2022",
+  target: "es2022" as const,
   outDir: "dist",
-  external: ["sanity", "react", "next", "server-only"],
-});
+  external: ["sanity", "react", "react/jsx-runtime", "next", "next/server", "server-only"],
+};
+
+export default defineConfig([
+  {
+    ...shared,
+    entry: {
+      "sanity/index": "src/sanity/index.ts",
+      "next/index": "src/next/index.ts",
+      "next/middleware/index": "src/next/middleware/index.ts",
+      "engine/index": "src/engine/index.ts",
+    },
+    clean: true,
+  },
+  {
+    ...shared,
+    entry: { "next/client/index": "src/next/client/index.tsx" },
+    clean: false,
+    // The treeshake pass (rollup) drops module directives, so it is off here
+    // and esbuild keeps the file's own "use client".
+    treeshake: false,
+  },
+]);

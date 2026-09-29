@@ -6,7 +6,7 @@ Multi-language content for Sanity and Next.js sites. One package, three parts:
 2. **Next.js kit** (`@kaleidico/sanity-i18n/next`): locale routing under a prefix such as `/es`, hreflang and canonical tags, sitemap alternates, a language switcher and a UI dictionary.
 3. **Translation engine** (`@kaleidico/sanity-i18n/engine`, server only): translates documents with the client's own Anthropic API key, applying a glossary, a style guide, exact-match checks and a reviewer pass.
 
-Version 0.2.1 ships the Sanity plugin's first two parts: the Languages tab and the document-level content model (a document per language, linked to the source, with shared fields, per-language slugs, a status per document and legal marks). The Next.js kit ships its GROQ helpers; its routing and the engine are stubs that throw a clear error when called, so a site can wire the imports today and fill them in as the parts land.
+Version 0.3.0 ships the Sanity plugin (the Languages tab and the document-level content model: a document per language, linked to the source, with shared fields, per-language slugs, a status per document and legal marks) and the Next.js kit (locale routing, hreflang and canonical tags, Open Graph locales, sitemap alternates, the language switcher, the suggestion strip and the UI dictionary). The engine is still a stub that throws a clear error when called.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ Version 0.2.1 ships the Sanity plugin's first two parts: the Languages tab and t
 Until the package is on npm, install it from the release tag on GitHub. Each tag carries the built `dist/` folder.
 
 ```bash
-npm install github:kaleidico/sanity-i18n#v0.2.1
+npm install github:kaleidico/sanity-i18n#v0.3.0
 ```
 
 Once published:
@@ -211,6 +211,75 @@ const query = `*[_type == "loanOfficer" && ${localeFilter(lang)} && slug.current
 - `sharedProjection(["photo"])` is `"photo": coalesce(photo, i18n.source->photo)`.
 - `translationLinks()` adds `language` and `translations: [{ language, slug }]` for the switcher and hreflang tags, from either side of the link.
 
+## Next.js kit
+
+The site keeps English at the root and every other language under a prefix with its own slugs: `/conventional-loans` and `/es/prestamos-convencionales`. Only approved translations get a URL; a Spanish URL never falls back to English text.
+
+### Routes
+
+Move the public routes under a `[lang]` segment (`src/app/[lang]/...`) whose layout is the root layout and sets `<html lang={lang}>`. `generateStaticParams` on `[lang]` returns the enabled languages. Every route reads `params.lang`, filters its query with `localeFilter(lang)` (plus `i18n.status == "approved"` for non-default languages) and calls `notFound()` when nothing matches.
+
+### Middleware
+
+```ts
+// src/middleware.ts
+import { NextResponse, type NextRequest } from "next/server";
+import { createI18nMiddleware } from "@kaleidico/sanity-i18n/next/middleware";
+import { languages } from "@/sanity/languages";
+
+const i18n = createI18nMiddleware({ languages, exclude: ["/preview"] });
+
+export function middleware(request: NextRequest) {
+  return i18n(request) ?? NextResponse.next();
+}
+```
+
+A default-language request (`/about`) is rewritten to `/en/about`, so the public URL never changes. A direct request to `/en/about` is redirected (308) to `/about`, so there is one English URL. `/es/...` passes through. `/api`, `/_next`, `/studio`, any path with a file extension and anything in `exclude` are left alone. Pass `languages` as a function to resolve the enabled languages per request from a cached settings fetch; the middleware is then async. `resolveLocaleRoute()` in `/next` is the pure decision behind it, for tests.
+
+### Metadata
+
+```ts
+import { buildAlternates, openGraphLocale, inLanguage } from "@kaleidico/sanity-i18n/next";
+
+export async function generateMetadata({ params }) {
+  const { lang } = await params;
+  const page = await getPage(lang, slug);
+  const translations = Object.fromEntries(
+    page.translations.filter((t) => t.language === "en" || t.status === "approved").map((t) => [t.language, `/${t.slug}`]),
+  );
+  return {
+    alternates: buildAlternates({ siteUrl, lang, path: `/${page.slug}`, translations }),
+    openGraph: { ...openGraphLocale(lang, Object.keys(translations)) },
+  };
+}
+```
+
+`buildAlternates()` returns a self-referencing canonical in the page's own language and an hreflang entry per language the page exists in, plus `x-default` pointing at the default-language URL. Every language's page passes the same set, so the tags are reciprocal. `openGraphLocale("es", ["en", "es"])` gives `{ locale: "es_US", alternateLocale: ["en_US"] }`; `inLanguage("es")` gives `es-US` for JSON-LD; `localePath("es", "/about")` gives `/es/about`.
+
+### Switcher and suggestion strip
+
+`LanguageSwitcher` is a plain server-renderable `nav`: one link per other language, each with `lang` and `hrefLang` and the language's own name, to the same page in that language when a translation is live, else to that language's home. It renders nothing with one language, so a site with every other language switched off is unchanged.
+
+```tsx
+<LanguageSwitcher current={lang} languages={enabled} links={{ es: "/es/prestamos-convencionales" }} homeHrefs={{ en: "/", es: "/es" }} labels={{ ariaLabel: t(lang, "language") }} />
+```
+
+`LanguageSuggestion` (from `@kaleidico/sanity-i18n/next/client`) is a small dismissible strip that shows on a default-language page when the browser prefers an enabled language ("Ver en español"). It never redirects, remembers a dismissal in `localStorage` for 30 days, and renders nothing when no other language is enabled.
+
+### UI dictionary
+
+```ts
+import { createDictionary } from "@kaleidico/sanity-i18n/next";
+
+export const dictionary = createDictionary({
+  en: { readMore: "Read more", minRead: "{minutes} min read" },
+  es: { readMore: "Leer más", minRead: "{minutes} min de lectura" },
+});
+export const t = dictionary.t; // t("es", "minRead", { minutes: 4 })
+```
+
+Every language must define every key; a missing one fails at startup rather than falling back to English on a live page. Dates and money go through `Intl.DateTimeFormat(languageTag(lang))` and `Intl.NumberFormat(languageTag(lang), { style: "currency", currency: "USD" })`.
+
 ## What switching a language on does, and does not do
 
 Switching a language on in Site Settings **publishes nothing by itself**. It tells the site that the language exists, so the later parts of this package can offer it: a translation can be started for a page, the routing can reserve the `/es` prefix, and the switcher can list it. A page in that language only appears on the live site once it has been translated and its translation is approved.
@@ -249,9 +318,26 @@ The default language cannot be switched off. Every translation is made from it.
 | `defineLanguages`, `readEnabledLanguages`, `languageFieldKey`, types | Re-exported from the shared core, no Sanity import. |
 | `localeFilter(lang, defaultId?)` | GROQ clause matching one language (the default also matches documents without the field). |
 | `sharedProjection(fields)` | GROQ projection entries reading shared fields from the source document. |
-| `translationLinks({ slugField?, defaultId? })` | GROQ projection entries giving `language` and `translations: [{ language, slug }]`. |
+| `translationLinks({ slugField?, defaultId? })` | GROQ projection entries giving `language` and `translations: [{ language, slug, status }]`. |
 | `translationMetaId(sourceId)`, `TRANSLATION_META_TYPE`, `TRANSLATION_STATUSES`, `translationStatusLabel` | Shared constants and helpers. |
-| `defineI18nRoutes(config)` | Stub. Throws until part 3. |
+| `resolveLocaleRoute(pathname, { ids, defaultId, exclude? })`, `resolveLanguageIds`, `isExcludedPath` | The pure routing decision (`pass`, `rewrite`, `redirect`). |
+| `buildAlternates({ siteUrl, lang, defaultId?, path, translations? })` | `Metadata.alternates`: self canonical plus reciprocal hreflang with `x-default`. |
+| `openGraphLocale(lang, others?)`, `inLanguage(lang)`, `languageTag(lang)`, `localePath(lang, path)`, `localeUrl(siteUrl, lang, path)` | Locale tags and per-language URLs. |
+| `createDictionary({ en, es, ... })`, `interpolate` | The typed UI dictionary with `t(lang, key, vars?)`. |
+| `LanguageSwitcher`, `switcherHref` | The server-renderable switcher. |
+
+`@kaleidico/sanity-i18n/next/middleware`
+
+| Export | What it is |
+| --- | --- |
+| `createI18nMiddleware({ languages, defaultId?, exclude? })` | `(request) => NextResponse \| undefined`: rewrite, redirect or pass. Async when `languages` is a function. |
+
+`@kaleidico/sanity-i18n/next/client`
+
+| Export | What it is |
+| --- | --- |
+| `LanguageSuggestion` | The client-side "Ver en español" strip. |
+| `pickSuggestedLanguage(preferred, languages, defaultId)` | Which enabled language the browser's preference list points at. |
 
 `@kaleidico/sanity-i18n/engine` (server only, throws if imported in a browser)
 
@@ -262,7 +348,7 @@ The default language cannot be switched off. Every translation is made from it.
 ## Roadmap
 
 - **Part 2, linked translations:** shipped in 0.2.0 (see Content model). The approval workflow that fills `approvedAt` and `approvedBy` and re-locks legal text when the English changes lands with part 4.
-- **Part 3, Next.js kit:** locale routing under `/es`, hreflang and canonical tags, sitemap alternates, a language switcher and a UI dictionary.
+- **Part 3, Next.js kit:** shipped in 0.3.0 (see Next.js kit).
 - **Part 4, translation engine:** server-side translation with the client's own Anthropic API key, stored encrypted in Site Settings, with glossary, style guide, exact-match checks and a reviewer pass.
 
 ## Security

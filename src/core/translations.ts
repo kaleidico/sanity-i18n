@@ -114,8 +114,12 @@ export interface TranslationLinksOptions {
  * metadata document id is deterministic (see `translationMetaId`), so this is
  * a direct id lookup, not a search.
  *
+ * Each entry carries the linked document's translation `status`, so the
+ * front end can list only approved translations (the source document has no
+ * status and comes back with `null`).
+ *
  * Result shape on the fetched document:
- * `{ language: "en", translations: [{ language: "en", slug: "about" }, { language: "es", slug: "sobre-nosotros" }] }`
+ * `{ language: "en", translations: [{ language: "en", slug: "about", status: null }, { language: "es", slug: "sobre-nosotros", status: "approved" }] }`
  */
 export function translationLinks(options: TranslationLinksOptions = {}): string {
   const slugField = options.slugField ?? "slug";
@@ -123,6 +127,6 @@ export function translationLinks(options: TranslationLinksOptions = {}): string 
   const sourceId = `coalesce(^.${I18N_FIELD}.source._ref, ^._id)`;
   return [
     `"language": coalesce(${LANGUAGE_FIELD}, ${groqString(defaultId)})`,
-    `"translations": *[_type == ${groqString(TRANSLATION_META_TYPE)} && _id == ${groqString(TRANSLATION_META_ID_PREFIX)} + ${sourceId}][0].translations[]{ language, "slug": document->${slugField}.current }`,
+    `"translations": *[_type == ${groqString(TRANSLATION_META_TYPE)} && _id == ${groqString(TRANSLATION_META_ID_PREFIX)} + ${sourceId}][0].translations[]{ language, "slug": document->${slugField}.current, "status": document->${I18N_FIELD}.status }`,
   ].join(", ");
 }

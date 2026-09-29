@@ -1,7 +1,7 @@
 {
   "name": "@kaleidico/sanity-i18n",
-  "version": "0.2.1",
-  "description": "Multi-language content for Sanity and Next.js sites: languages in Site Settings, linked translations, locale routing with proper SEO, and a context-aware translation engine",
+  "version": "0.3.0",
+  "description": "Multi-language content for Sanity and Next.js sites: languages in Site Settings, linked translations, locale routing with hreflang, canonicals, a switcher and a UI dictionary, and a context-aware translation engine",
   "license": "MIT",
   "author": "Kaleidico",
   "repository": {
@@ -42,6 +42,16 @@
       "import": "./dist/next/index.js",
       "default": "./dist/next/index.js"
     },
+    "./next/middleware": {
+      "types": "./dist/next/middleware/index.d.ts",
+      "import": "./dist/next/middleware/index.js",
+      "default": "./dist/next/middleware/index.js"
+    },
+    "./next/client": {
+      "types": "./dist/next/client/index.d.ts",
+      "import": "./dist/next/client/index.js",
+      "default": "./dist/next/client/index.js"
+    },
     "./engine": {
       "types": "./dist/engine/index.d.ts",
       "import": "./dist/engine/index.js",
@@ -53,6 +63,8 @@
     "*": {
       "sanity": ["./dist/sanity/index.d.ts"],
       "next": ["./dist/next/index.d.ts"],
+      "next/middleware": ["./dist/next/middleware/index.d.ts"],
+      "next/client": ["./dist/next/client/index.d.ts"],
       "engine": ["./dist/engine/index.d.ts"]
     }
   },

@@ -30,7 +30,7 @@ test("translationLinks resolves the metadata document by its deterministic id", 
   assert.equal(
     translationLinks(),
     '"language": coalesce(language, "en"), ' +
-      '"translations": *[_type == "i18n.translationMeta" && _id == "i18n.meta." + coalesce(^.i18n.source._ref, ^._id)][0].translations[]{ language, "slug": document->slug.current }',
+      '"translations": *[_type == "i18n.translationMeta" && _id == "i18n.meta." + coalesce(^.i18n.source._ref, ^._id)][0].translations[]{ language, "slug": document->slug.current, "status": document->i18n.status }',
   );
   const custom = translationLinks({ slugField: "path", defaultId: "es" });
   assert.match(custom, /"language": coalesce\(language, "es"\)/);
