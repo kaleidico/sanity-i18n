@@ -24,7 +24,9 @@ export default defineConfig([
       "next/middleware/index": "src/next/middleware/index.ts",
       "engine/index": "src/engine/index.ts",
     },
-    clean: true,
+    // Cleaning is done by the build script, not here: the two builds run at
+    // the same time and a clean in one would wipe the other's output.
+    clean: false,
   },
   {
     ...shared,
