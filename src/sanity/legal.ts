@@ -12,9 +12,19 @@ import type { SchemaTypeDefinition } from "sanity";
 
 export const LEGAL_NOTE = "(legal text: needs approval before it goes live in another language)";
 
+/**
+ * Anything with an optional `options` and `description`: a field definition,
+ * an array member or a type definition. Kept loose on purpose so Sanity's
+ * own option types (`StringOptions`, `TextOptions`, ...) are accepted as is.
+ */
 interface WithOptions {
-  options?: Record<string, unknown> & { i18n?: { legal?: boolean } };
+  options?: unknown;
   description?: unknown;
+}
+
+interface I18nOptions {
+  i18n?: { legal?: boolean };
+  [key: string]: unknown;
 }
 
 function withLegalMark<T extends WithOptions>(def: T): T {
@@ -22,14 +32,15 @@ function withLegalMark<T extends WithOptions>(def: T): T {
     typeof def.description === "string" && def.description.trim() !== ""
       ? `${def.description} ${LEGAL_NOTE}`
       : LEGAL_NOTE;
+  const options = (def.options ?? {}) as I18nOptions;
   return {
     ...def,
     description,
     options: {
-      ...(def.options ?? {}),
-      i18n: { ...(def.options?.i18n ?? {}), legal: true },
+      ...options,
+      i18n: { ...(options.i18n ?? {}), legal: true },
     },
-  };
+  } as T;
 }
 
 /** Mark a field definition as legal text. Returns a new definition; the input is not changed. */
@@ -45,7 +56,7 @@ export function legalBlock<T extends WithOptions>(blockTypeDef: T): T {
 /** True when a field, member or schema type carries the legal mark. */
 export function isLegal(schemaTypeOrField: unknown): boolean {
   if (!schemaTypeOrField || typeof schemaTypeOrField !== "object") return false;
-  const options = (schemaTypeOrField as WithOptions).options;
+  const options = (schemaTypeOrField as WithOptions).options as I18nOptions | undefined;
   return options?.i18n?.legal === true;
 }
 
