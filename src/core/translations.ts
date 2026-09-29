@@ -46,12 +46,14 @@ export function translationStatusLabel(
 export const TRANSLATION_META_TYPE = "i18n.translationMeta";
 
 /** Prefix of every metadata document id. */
-export const TRANSLATION_META_ID_PREFIX = "i18n.meta.";
+export const TRANSLATION_META_ID_PREFIX = "i18n-meta-";
 
 /**
  * The id of the metadata document for a source document. Deterministic, so
- * there is never more than one per source: `i18n.meta.<sourceId>`. A draft id
- * is normalised to its published id first.
+ * there is never more than one per source: `i18n-meta-<sourceId>`. A draft id
+ * is normalised to its published id first. The prefix has no period on
+ * purpose: Sanity hides any document whose id contains one from public
+ * (unauthenticated) reads, and the site reads these without a token.
  */
 export function translationMetaId(sourceId: string): string {
   const published = sourceId.startsWith("drafts.") ? sourceId.slice("drafts.".length) : sourceId;

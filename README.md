@@ -6,7 +6,7 @@ Multi-language content for Sanity and Next.js sites. One package, three parts:
 2. **Next.js kit** (`@kaleidico/sanity-i18n/next`): locale routing under a prefix such as `/es`, hreflang and canonical tags, sitemap alternates, a language switcher and a UI dictionary.
 3. **Translation engine** (`@kaleidico/sanity-i18n/engine`, server only): translates documents with the client's own Anthropic API key, applying a glossary, a style guide, exact-match checks and a reviewer pass.
 
-Version 0.3.1 ships the Sanity plugin (the Languages tab and the document-level content model: a document per language, linked to the source, with shared fields, per-language slugs, a status per document and legal marks) and the Next.js kit (locale routing, hreflang and canonical tags, Open Graph locales, sitemap alternates, the language switcher, the suggestion strip and the UI dictionary). The engine is still a stub that throws a clear error when called.
+Version 0.3.2 ships the Sanity plugin (the Languages tab and the document-level content model: a document per language, linked to the source, with shared fields, per-language slugs, a status per document and legal marks) and the Next.js kit (locale routing, hreflang and canonical tags, Open Graph locales, sitemap alternates, the language switcher, the suggestion strip and the UI dictionary). The engine is still a stub that throws a clear error when called.
 
 ## Requirements
 
@@ -20,7 +20,7 @@ Version 0.3.1 ships the Sanity plugin (the Languages tab and the document-level 
 Until the package is on npm, install it from the release tag on GitHub. Each tag carries the built `dist/` folder.
 
 ```bash
-npm install github:kaleidico/sanity-i18n#v0.3.1
+npm install github:kaleidico/sanity-i18n#v0.3.2
 ```
 
 Once published:
@@ -169,7 +169,7 @@ The mark is `options.i18n.legal = true`, and the description gains "(legal text:
 
 ### The metadata document
 
-`i18n.translationMeta` links one source document to every language it exists in: `sourceType` and `translations[]`, one entry per language (`_key` is the language id) with a weak reference to that language's document. Its id is deterministic, `translationMetaId(sourceId)` = `i18n.meta.<sourceId>`, so there is never more than one per source. Both directions resolve in GROQ: a translation's `i18n.source` points at the source, the metadata document lists all languages. The plugin registers the type once `translatableTypes` is set; it is hidden from search and should not be listed in the desk.
+`i18n.translationMeta` links one source document to every language it exists in: `sourceType` and `translations[]`, one entry per language (`_key` is the language id) with a weak reference to that language's document. Its id is deterministic, `translationMetaId(sourceId)` = `i18n-meta-<sourceId>`, so there is never more than one per source (no period in the id: Sanity hides dotted ids from public reads, and the site reads without a token). Both directions resolve in GROQ: a translation's `i18n.source` points at the source, the metadata document lists all languages. The plugin registers the type once `translatableTypes` is set; it is hidden from search and should not be listed in the desk.
 
 ### Desk
 

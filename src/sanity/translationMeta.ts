@@ -11,7 +11,7 @@ export interface TranslationMetaOptions {
 
 /**
  * The metadata document that links one source document to every language it
- * exists in. One per source, id `i18n.meta.<sourceId>` (see `translationMetaId`).
+ * exists in. One per source, id `i18n-meta-<sourceId>` (see `translationMetaId`).
  *
  * Both directions resolve in GROQ: a translation's `i18n.source` points at
  * the source document, and this document lists all languages (the source
