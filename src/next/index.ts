@@ -1,10 +1,12 @@
 /**
  * @kaleidico/sanity-i18n/next
  *
- * Next.js side. Part 3 adds locale routing under `/es`, hreflang and
- * canonical tags, sitemap alternates, a language switcher and a UI
- * dictionary. Until then this entry exposes the shared language helpers and
- * a placeholder for the routing setup so hosts can wire imports early.
+ * Next.js side, with no Sanity import. Exposes the shared language helpers
+ * and the GROQ helpers for reading translated documents. Part 3 adds locale
+ * routing under `/es`, hreflang and canonical tags, sitemap alternates, a
+ * language switcher and a UI dictionary; until then `defineI18nRoutes()`
+ * throws so a half-wired site fails loudly rather than serving untranslated
+ * pages under a language prefix.
  */
 export {
   defineLanguages,
@@ -17,6 +19,22 @@ export {
   type SettingsWithLanguages,
   type ReadEnabledLanguagesOptions,
 } from "../core/languages";
+
+export {
+  localeFilter,
+  sharedProjection,
+  translationLinks,
+  translationMetaId,
+  translationStatusLabel,
+  TRANSLATION_STATUSES,
+  TRANSLATION_META_TYPE,
+  TRANSLATION_META_ID_PREFIX,
+  LANGUAGE_FIELD,
+  I18N_FIELD,
+  type TranslationStatus,
+  type TranslationLabels,
+  type TranslationLinksOptions,
+} from "../core/translations";
 
 export interface I18nRoutesConfig {
   languages: import("../core/languages").LanguagesInput;

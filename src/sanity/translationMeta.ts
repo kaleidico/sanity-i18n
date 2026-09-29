@@ -1,64 +1,71 @@
 import { defineField, defineType } from "sanity";
+import type { DocumentDefinition } from "sanity";
+import { TRANSLATION_META_TYPE, translationMetaId } from "../core/translations";
 
-/** Per-document translation states, in the order they are shown. */
-export const TRANSLATION_STATUSES = [
-  { title: "Draft", value: "draft" },
-  { title: "Needs update", value: "needs-update" },
-  { title: "Awaiting approval", value: "awaiting-approval" },
-  { title: "Approved", value: "approved" },
-] as const;
+export { TRANSLATION_META_TYPE, translationMetaId };
 
-export type TranslationStatus = (typeof TRANSLATION_STATUSES)[number]["value"];
-
-export const TRANSLATION_META_TYPE = "i18n.translationMeta";
+export interface TranslationMetaOptions {
+  /** The document types that were wrapped with `translatable()`. The `document` reference can point at any of them. */
+  translatableTypes: readonly string[];
+}
 
 /**
- * Minimal metadata document that will link a translated document to its
- * source. Part 2 (document-level translations) adds the references to the
- * source and translated documents, the desk structure entry and the badges.
- * For now it only exists so the schema type name is reserved and stable.
+ * The metadata document that links one source document to every language it
+ * exists in. One per source, id `i18n.meta.<sourceId>` (see `translationMetaId`).
  *
- * It is hidden from omnisearch. Hosts with a custom desk structure should not
- * list it; hosts using the default structure will see it until part 2 wires
- * it properly.
+ * Both directions resolve in GROQ: a translation's `i18n.source` points at
+ * the source document, and this document lists all languages (the source
+ * included) with a weak reference to each.
+ *
+ * Hidden from omnisearch. Hosts with a custom desk structure should not list
+ * it; `translationsStructure()` does not either.
  */
-export const translationMetaType = defineType({
-  name: TRANSLATION_META_TYPE,
-  title: "Translation metadata",
-  type: "document",
-  __experimental_omnisearch_visibility: false,
-  fields: [
-    defineField({
-      name: "language",
-      title: "Language",
-      type: "string",
-      description: "Language id of the translated document, e.g. es.",
-      validation: (rule) => rule.required(),
-    }),
-    defineField({
-      name: "status",
-      title: "Status",
-      type: "string",
-      options: { list: [...TRANSLATION_STATUSES], layout: "radio" },
-      initialValue: "draft",
-      validation: (rule) => rule.required(),
-    }),
-    defineField({
-      name: "sourceHash",
-      title: "Source hash",
-      type: "string",
-      description:
-        "Fingerprint of the source document when this translation was last made. A different fingerprint later means the translation needs an update.",
-    }),
-    defineField({
-      name: "legal",
-      title: "Legal content",
-      type: "boolean",
-      description: "Legal or regulated copy that must be approved by a person before it goes live.",
-      initialValue: false,
-    }),
-  ],
-  preview: {
-    select: { title: "language", subtitle: "status" },
-  },
-});
+export function translationMetaType(options: TranslationMetaOptions): DocumentDefinition {
+  const to = options.translatableTypes.map((type) => ({ type }));
+  if (to.length === 0) {
+    throw new Error("translationMetaType: translatableTypes must list at least one document type");
+  }
+
+  return defineType({
+    name: TRANSLATION_META_TYPE,
+    title: "Translation metadata",
+    type: "document",
+    __experimental_omnisearch_visibility: false,
+    fields: [
+      defineField({
+        name: "sourceType",
+        title: "Source type",
+        type: "string",
+        description: "Schema type of the source document, e.g. page.",
+        readOnly: true,
+        validation: (rule) => rule.required(),
+      }),
+      defineField({
+        name: "translations",
+        title: "Translations",
+        type: "array",
+        readOnly: true,
+        of: [
+          {
+            type: "object",
+            name: "translation",
+            fields: [
+              defineField({ name: "language", title: "Language", type: "string", validation: (rule) => rule.required() }),
+              defineField({ name: "document", title: "Document", type: "reference", to, weak: true }),
+            ],
+            preview: { select: { title: "language", subtitle: "document._ref" } },
+          },
+        ],
+      }),
+    ],
+    preview: {
+      select: { title: "sourceType", translations: "translations" },
+      prepare: ({ title, translations }) => ({
+        title: title ? `Translations of a ${title}` : "Translations",
+        subtitle: Array.isArray(translations)
+          ? translations.map((t: { language?: string }) => t?.language).filter(Boolean).join(", ")
+          : undefined,
+      }),
+    },
+  });
+}

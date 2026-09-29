@@ -1,6 +1,6 @@
 {
   "name": "@kaleidico/sanity-i18n",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Multi-language content for Sanity and Next.js sites: languages in Site Settings, linked translations, locale routing with proper SEO, and a context-aware translation engine",
   "license": "MIT",
   "author": "Kaleidico",
