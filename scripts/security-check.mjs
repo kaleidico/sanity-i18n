@@ -8,6 +8,10 @@
  * - Anthropic style keys (`sk-ant-`), and generic long `sk-` secrets
  * - a literal `apiKey` assignment with a string value
  * - `console.log(` on a line that also mentions a key, token or secret
+ * - any console call within a few lines of code that handles the API key or
+ *   decrypts it (`apiKey`, `decrypt`, `privateKey`, `ciphertext`)
+ * - any console call at all in the engine entries, which handle the key, the
+ *   prompts and the client's content and have no reason to log
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
@@ -35,6 +39,11 @@ function walk(dir) {
   return files;
 }
 
+const CONSOLE_CALL = /console\.(log|info|debug|warn|error|trace|dir)\s*\(/;
+const SENSITIVE = /apiKey|decrypt|privateKey|ciphertext/i;
+// How many lines either side of sensitive code a console call is refused.
+const NEAR = 4;
+
 let files;
 try {
   files = walk(distDir);
@@ -46,10 +55,23 @@ try {
 const findings = [];
 for (const file of files) {
   const lines = readFileSync(file, "utf8").split("\n");
+  const name = relative(root, file);
+  const isEngine = name.startsWith("dist/engine/") && /\.m?js$/.test(name);
   lines.forEach((line, i) => {
     for (const rule of RULES) {
       if (rule.pattern.test(line)) {
-        findings.push({ file: relative(root, file), line: i + 1, rule: rule.name });
+        findings.push({ file: name, line: i + 1, rule: rule.name });
+      }
+    }
+    if (/\.m?js$/.test(name) && CONSOLE_CALL.test(line)) {
+      if (isEngine) findings.push({ file: name, line: i + 1, rule: "console call in the engine" });
+      const from = Math.max(0, i - NEAR);
+      const to = Math.min(lines.length - 1, i + NEAR);
+      for (let j = from; j <= to; j++) {
+        if (SENSITIVE.test(lines[j])) {
+          findings.push({ file: name, line: i + 1, rule: `console call near key handling (line ${j + 1})` });
+          break;
+        }
       }
     }
   });

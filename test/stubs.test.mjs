@@ -26,10 +26,21 @@ test("next/client entry is marked for the client and exposes the suggestion stri
   assert.equal(typeof client.pickSuggestedLanguage, "function");
 });
 
-test("engine entry throws a loud stub on the server", async () => {
+test("engine entries load on the server and expose the engine and the route", async () => {
   const engine = await import("../dist/engine/index.js");
-  await assert.rejects(
-    engine.translateDocument({ document: {}, targetLanguage: "es" }),
-    /not implemented until part 4/,
-  );
+  for (const name of ["translateDocument", "runJob", "estimateCost", "diffSource", "checkExactMatch", "buildFieldManifest", "decryptSecret", "loadApiKey", "createSanityHttp"]) {
+    assert.equal(typeof engine[name], "function", name);
+  }
+  const route = await import("../dist/engine/route/index.js");
+  assert.equal(typeof route.createTranslateRoute, "function");
+  assert.deepEqual(Object.keys(route), ["createTranslateRoute"]);
+});
+
+test("engine entries refuse to load in a browser", async () => {
+  const { readFileSync } = await import("node:fs");
+  for (const entry of ["engine/index.js", "engine/route/index.js"]) {
+    const source = readFileSync(new URL(`../dist/${entry}`, import.meta.url), "utf8");
+    assert.match(source, /typeof window !== "undefined"/, entry);
+    assert.match(source, /is server-only/, entry);
+  }
 });

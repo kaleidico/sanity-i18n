@@ -16,7 +16,7 @@ test("i18nPlugin is named kaleidico-i18n and registers the meta type for the tra
   });
   assert.equal(plugin.name, I18N_PLUGIN_NAME);
   assert.equal(I18N_PLUGIN_NAME, "kaleidico-i18n");
-  assert.deepEqual(plugin.schema.types.map((t) => t.name), [TRANSLATION_META_TYPE]);
+  assert.deepEqual(plugin.schema.types.map((t) => t.name), [TRANSLATION_META_TYPE, "i18n.job", "i18n.secrets", "i18n.manifest"]);
   assert.deepEqual(plugin.i18n.languages.languages.map((l) => l.id), ["en", "es"]);
   assert.deepEqual(plugin.i18n.translatableTypes, ["page", "blogPost"]);
 

@@ -23,7 +23,7 @@ interface WithOptions {
 }
 
 interface I18nOptions {
-  i18n?: { legal?: boolean };
+  i18n?: { legal?: boolean; translate?: boolean };
   [key: string]: unknown;
 }
 
@@ -51,6 +51,25 @@ export function legalText<T extends WithOptions>(fieldDef: T): T {
 /** Mark an object or block type definition as legal text. Returns a new definition; the input is not changed. */
 export function legalBlock<T extends WithOptions>(blockTypeDef: T): T {
   return withLegalMark(blockTypeDef);
+}
+
+/**
+ * Mark a field as never translated: a machine name, a stored value, an id.
+ * The translation engine leaves it exactly as it is in the source. Returns a
+ * new definition; the input is not changed.
+ *
+ * The engine already skips URLs, fixed choices, references, slugs and fields
+ * whose name marks them as plumbing (`href`, `ctaUrl`, `gtmId`). Use this for
+ * a plain string field it cannot tell apart from copy, such as a form
+ * field's `name`. The opposite, `options: { i18n: { translate: true } }`,
+ * forces a field to be translated.
+ */
+export function noTranslate<T extends WithOptions>(fieldDef: T): T {
+  const options = (fieldDef.options ?? {}) as I18nOptions;
+  return {
+    ...fieldDef,
+    options: { ...options, i18n: { ...(options.i18n ?? {}), translate: false } },
+  } as T;
 }
 
 /** True when a field, member or schema type carries the legal mark. */

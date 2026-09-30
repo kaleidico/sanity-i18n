@@ -1,6 +1,6 @@
 {
   "name": "@kaleidico/sanity-i18n",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "Multi-language content for Sanity and Next.js sites: languages in Site Settings, linked translations, locale routing with hreflang, canonicals, a switcher and a UI dictionary, and a context-aware translation engine",
   "license": "MIT",
   "author": "Kaleidico",
@@ -28,9 +28,13 @@
   },
   "files": [
     "dist",
+    "scripts/generate-keys.mjs",
     "README.md",
     "LICENSE"
   ],
+  "bin": {
+    "sanity-i18n-generate-keys": "scripts/generate-keys.mjs"
+  },
   "exports": {
     "./sanity": {
       "types": "./dist/sanity/index.d.ts",
@@ -57,15 +61,33 @@
       "import": "./dist/engine/index.js",
       "default": "./dist/engine/index.js"
     },
+    "./engine/route": {
+      "types": "./dist/engine/route/index.d.ts",
+      "import": "./dist/engine/route/index.js",
+      "default": "./dist/engine/route/index.js"
+    },
     "./package.json": "./package.json"
   },
   "typesVersions": {
     "*": {
-      "sanity": ["./dist/sanity/index.d.ts"],
-      "next": ["./dist/next/index.d.ts"],
-      "next/middleware": ["./dist/next/middleware/index.d.ts"],
-      "next/client": ["./dist/next/client/index.d.ts"],
-      "engine": ["./dist/engine/index.d.ts"]
+      "sanity": [
+        "./dist/sanity/index.d.ts"
+      ],
+      "next": [
+        "./dist/next/index.d.ts"
+      ],
+      "next/middleware": [
+        "./dist/next/middleware/index.d.ts"
+      ],
+      "next/client": [
+        "./dist/next/client/index.d.ts"
+      ],
+      "engine": [
+        "./dist/engine/index.d.ts"
+      ],
+      "engine/route": [
+        "./dist/engine/route/index.d.ts"
+      ]
     }
   },
   "scripts": {
@@ -75,7 +97,12 @@
     "check": "node scripts/security-check.mjs",
     "prepack": "npm run build && npm run check"
   },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.129.0"
+  },
   "peerDependencies": {
+    "@sanity/icons": "^3",
+    "@sanity/ui": "^2 || ^3",
     "next": "^15 || ^16",
     "react": "^18 || ^19",
     "sanity": "^5"
@@ -86,6 +113,8 @@
     }
   },
   "devDependencies": {
+    "@sanity/icons": "^3.8.0",
+    "@sanity/ui": "^3.5.5",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "next": "^16.2.0",

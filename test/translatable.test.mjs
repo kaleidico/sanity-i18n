@@ -48,7 +48,7 @@ test("translatable adds language and i18n at the top and keeps the rest", () => 
   assert.equal(i18n.title, "Translation");
   assert.deepEqual(
     i18n.fields.map((f) => f.name),
-    ["source", "status", "sourceHash", "translatedAt", "approvedAt", "approvedBy"],
+    ["source", "status", "sourceHash", "sourceHashes", "translatedAt", "approvedAt", "approvedBy", "report"],
   );
   const source = i18n.fields.find((f) => f.name === "source");
   assert.equal(source.type, "reference");
@@ -65,6 +65,12 @@ test("translatable adds language and i18n at the top and keeps the rest", () => 
   assert.equal(status.initialValue, "draft");
 
   assert.equal(i18n.fields.find((f) => f.name === "sourceHash").hidden, true);
+  // The engine's own bookkeeping is stored but never shown in the form.
+  for (const name of ["sourceHashes", "report"]) {
+    const field = i18n.fields.find((f) => f.name === name);
+    assert.equal(field.hidden, true);
+    assert.equal(field.readOnly, true);
+  }
   for (const name of ["translatedAt", "approvedAt", "approvedBy"]) {
     assert.equal(i18n.fields.find((f) => f.name === name).readOnly, true);
   }

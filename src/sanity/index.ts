@@ -3,7 +3,9 @@
  *
  * Sanity Studio side: language config, the Site Settings "Languages" field,
  * the document-level translation model (`translatable`, legal marks, the
- * metadata document), the desk helpers and the Studio plugin.
+ * metadata document), the desk helpers, the Studio plugin, and the Studio
+ * side of the translation engine (settings fields, the key input, the
+ * translate action, the stale check on publish and the Translations tool).
  */
 export {
   defineLanguages,
@@ -50,6 +52,7 @@ export {
 export {
   legalText,
   legalBlock,
+  noTranslate,
   isLegal,
   collectLegalPaths,
   LEGAL_NOTE,
@@ -76,5 +79,97 @@ export {
 export {
   i18nPlugin,
   I18N_PLUGIN_NAME,
+  I18N_HIDDEN_TYPES,
   type I18nPluginConfig,
+  type I18nEngineConfig,
 } from "./plugin";
+
+// ── Translation engine, Studio side ─────────────────────────────────────
+
+export {
+  glossaryField,
+  styleGuideField,
+  engineField,
+  apiKeyField,
+  type EngineFieldOptions,
+  type ApiKeyFieldOptions,
+} from "./engineFields";
+
+export { ApiKeyInput, KEY_STORAGE_NOT_CONFIGURED } from "./ApiKeyInput";
+
+export { translateAction, JobOutcomeView, type TranslateActionOptions } from "./translateAction";
+
+export { publishWithStaleCheck, type PublishWithStaleCheckOptions } from "./publishWithStaleCheck";
+
+export { translationsTool, summariseTranslations, type TranslationsToolOptions } from "./TranslationsTool";
+
+export {
+  ensureManifest,
+  createJob,
+  startJob,
+  watchJob,
+  DEFAULT_ENDPOINT,
+  type StudioEngineOptions,
+  type NewJob,
+} from "./studioEngine";
+
+export {
+  translationJobType,
+  translationSecretsType,
+  translationManifestType,
+  sourceHashesField,
+  reportField,
+  reportFields,
+} from "./engineTypes";
+
+export {
+  buildFieldManifest,
+  NON_TEXT_FIELD_NAME,
+  type FieldManifest,
+  type ManifestNode,
+  type ManifestDocumentType,
+  type CompiledSchemaLike,
+} from "../core/manifest";
+
+export {
+  extractUnits,
+  diffSource,
+  sourceHashes,
+  type TranslationUnit,
+  type SourceDiff,
+  type SourceHashEntry,
+} from "../core/payload";
+
+export { MODELS, RATES_AS_OF, DEFAULT_TRANSLATOR_MODEL, DEFAULT_REVIEWER_MODEL, type ModelInfo } from "../core/pricing";
+
+export {
+  encryptSecret,
+  publicKeyFingerprint,
+  translationId,
+  toSlug,
+  readGlossary,
+  readStyleGuide,
+  readEngineSettings,
+  SECRETS_ID,
+  SECRETS_TYPE,
+  MANIFEST_ID,
+  MANIFEST_TYPE,
+  JOB_TYPE,
+  JOB_ID_PREFIX,
+  ENGINE_DOCUMENT_TYPES,
+  ENGINE_SETTINGS_FIELDS,
+  GLOSSARY_FIELD,
+  STYLE_GUIDE_FIELD,
+  ENGINE_FIELD,
+  API_KEY_FIELD,
+  type Glossary,
+  type GlossaryTerm,
+  type StyleGuide,
+  type EngineSettings,
+  type TranslationJob,
+  type TranslationReport,
+  type CostEstimate,
+  type ReviewIssue,
+  type JobMode,
+  type JobStatus,
+} from "../core/engineModel";
