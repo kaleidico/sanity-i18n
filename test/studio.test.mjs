@@ -7,6 +7,7 @@ import {
   glossaryField,
   styleGuideField,
   engineField,
+  legalApproversField,
   apiKeyField,
   ApiKeyInput,
   KEY_STORAGE_NOT_CONFIGURED,
@@ -33,8 +34,8 @@ const languages = [{ id: "es", title: "Spanish", nativeTitle: "Español" }];
 
 test("the plugin registers the translate action, the publish check, the tool and the private types", () => {
   const plugin = i18nPlugin({ languages, translatableTypes: ["page"], titles: { page: "Pages" } });
-  assert.deepEqual(plugin.schema.types.map((t) => t.name), ["i18n.translationMeta", "i18n.job", "i18n.secrets", "i18n.manifest"]);
-  assert.deepEqual(I18N_HIDDEN_TYPES, ["i18n.translationMeta", "i18n.secrets", "i18n.manifest", "i18n.job"]);
+  assert.deepEqual(plugin.schema.types.map((t) => t.name), ["i18n.translationMeta", "i18n.job", "i18n.secrets", "i18n.manifest", "i18n.legalApproval"]);
+  assert.deepEqual(I18N_HIDDEN_TYPES, ["i18n.translationMeta", "i18n.secrets", "i18n.manifest", "i18n.job", "i18n.legalApproval"]);
   assert.equal(plugin.i18n.engine, true);
 
   const publish = () => null;
@@ -47,7 +48,7 @@ test("the plugin registers the translate action, the publish check, the tool and
   assert.equal(forPage.length, 3);
   assert.notEqual(forPage[0], publish, "publish is wrapped");
   assert.equal(forPage[0].action, "publish", "and still is the publish action");
-  assert.equal(forPage[0].displayName, "PublishWithStaleCheck");
+  assert.equal(forPage[0].displayName, "PublishTranslation", "the outer wrapper is the publish rule for translations");
   assert.equal(forPage[1], other);
   assert.equal(forPage[2].displayName, "TranslateTo_es");
   // The wrapped action keeps its identity from one render to the next.
@@ -55,14 +56,14 @@ test("the plugin registers the translate action, the publish check, the tool and
   // Types that are not translatable are left alone.
   assert.equal(plugin.document.actions(prev, { schemaType: "redirect" }), prev);
 
-  assert.equal(plugin.tools.length, 1);
-  assert.equal(plugin.tools[0].name, "translations");
-  assert.equal(plugin.tools[0].title, "Translations");
-  assert.equal(typeof plugin.tools[0].component, "function");
+  assert.equal(plugin.tools.length, 2);
+  assert.deepEqual(plugin.tools.map((t) => [t.name, t.title]), [["translations", "Translations"], ["legal-approvals", "Legal approvals"]]);
+  assert.ok(plugin.tools.every((t) => typeof t.component === "function"));
   assert.equal(plugin.tools[0].options.titles.page, "Pages");
+  assert.equal(plugin.tools[1].options.titles.page, "Pages");
 
   // The bookkeeping documents are not offered under "new document".
-  const templates = ["page", "i18n.job", "i18n.secrets", "i18n.manifest", "i18n.translationMeta"].map((templateId) => ({ templateId }));
+  const templates = ["page", "i18n.job", "i18n.secrets", "i18n.manifest", "i18n.translationMeta", "i18n.legalApproval"].map((templateId) => ({ templateId }));
   assert.deepEqual(plugin.document.newDocumentOptions(templates).map((t) => t.templateId), ["page"]);
 });
 
@@ -81,15 +82,17 @@ test("engine: false leaves the action, the publish check, the tool and the priva
 });
 
 test("the settings fields land in the Languages group and are never sent to the translator", () => {
-  const fields = [glossaryField(), styleGuideField(), engineField(), apiKeyField({ publicKey: "PUBLIC" })];
-  assert.deepEqual(fields.map((f) => f.name), ["i18nGlossary", "i18nStyleGuide", "i18nEngine", "i18nApiKey"]);
+  const fields = [glossaryField(), styleGuideField(), engineField(), apiKeyField({ publicKey: "PUBLIC" }), legalApproversField()];
+  assert.deepEqual(fields.map((f) => f.name), ["i18nGlossary", "i18nStyleGuide", "i18nEngine", "i18nApiKey", "i18nLegalApprovers"]);
   assert.deepEqual(fields.map((f) => f.name), [...ENGINE_SETTINGS_FIELDS]);
   assert.ok(fields.every((f) => f.group === LANGUAGES_GROUP.name));
   assert.ok(fields.every((f) => f.options.i18n.translate === false));
   assert.equal(glossaryField({ group: false }).group, undefined);
   assert.equal(glossaryField({ name: "glossary" }).name, "glossary");
 
-  const [glossary, style, engine, apiKey] = fields;
+  const [glossary, style, engine, apiKey, approvers] = fields;
+  assert.equal(approvers.type, "array");
+  assert.equal(approvers.options.layout, "tags");
   assert.deepEqual(glossary.fields.map((f) => f.name), ["doNotTranslate", "terms"]);
   assert.deepEqual(glossary.fields[1].of[0].fields.map((f) => f.name), ["source", "target", "note"]);
   assert.deepEqual(style.fields.map((f) => [f.name, f.initialValue]), [["market", "es-US"], ["register", "usted"], ["audience", undefined], ["notes", undefined]]);
@@ -97,7 +100,8 @@ test("the settings fields land in the Languages group and are never sent to the 
   assert.deepEqual(engine.fields.map((f) => f.name), ["translatorModel", "reviewerModel", "autoPublishMarketing"]);
   assert.deepEqual(engine.fields[0].options.list.map((o) => o.value), MODELS.map((m) => m.id));
   assert.deepEqual([engine.fields[0].initialValue, engine.fields[1].initialValue], ["claude-opus-5-5", "claude-opus-5-5"]);
-  assert.equal(engine.fields[2].readOnly, true);
+  assert.equal(engine.fields[2].readOnly, undefined);
+  assert.equal(engine.fields[2].initialValue, true);
 
   assert.equal(apiKey.type, "string");
   assert.equal(apiKey.components.input, ApiKeyInput);
@@ -140,7 +144,8 @@ test("reading the glossary, style guide and engine settings tidies what editors 
   assert.deepEqual(readEngineSettings(settings), { translatorModel: "claude-sonnet-5-5", reviewerModel: "claude-opus-5-5", autoPublishMarketing: true });
   assert.deepEqual(readGlossary(null), { doNotTranslate: [], terms: [] });
   assert.deepEqual(readStyleGuide({}), { market: "es-US", register: "usted", audience: "", notes: "" });
-  assert.deepEqual(readEngineSettings(undefined), { translatorModel: "claude-opus-5-5", reviewerModel: "claude-opus-5-5", autoPublishMarketing: false });
+  assert.deepEqual(readEngineSettings(undefined), { translatorModel: "claude-opus-5-5", reviewerModel: "claude-opus-5-5", autoPublishMarketing: true });
+  assert.equal(readEngineSettings({ i18nEngine: { autoPublishMarketing: false } }).autoPublishMarketing, false);
 });
 
 test("the Translations tool counts per type and works out what a run would do", () => {

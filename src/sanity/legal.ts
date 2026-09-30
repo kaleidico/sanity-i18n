@@ -103,9 +103,12 @@ interface LooseField {
  * - `legalLinks[].label` for a legal field inside an inline array member
  * - `fields[consentField].consentText` for a legal field inside a named array member
  * - `blocks[disclosureBlock]` for a whole array member type marked with `legalBlock`
+ * - `blocks[formBlock].fields[consentField].consentText` for a legal field in
+ *   an array inside an array member
  *
- * Arrays are followed one level deep: the members' own fields are inspected,
- * but arrays inside those members are not.
+ * Arrays are followed to any depth, the same as the translation engine's
+ * field manifest, so this list is exactly what the engine treats as legal. A
+ * named type that refers to itself is followed once.
  */
 export function collectLegalPaths(
   documentTypeDef: SchemaTypeDefinition | { fields?: unknown[] },
@@ -116,7 +119,7 @@ export function collectLegalPaths(
     if (t && typeof t.name === "string") registry.set(t.name, t as unknown as LooseField);
   }
   const out: string[] = [];
-  walkFields(((documentTypeDef as LooseField).fields ?? []) as LooseField[], "", registry, out, false);
+  walkFields(((documentTypeDef as LooseField).fields ?? []) as LooseField[], "", registry, out, new Set());
   return out;
 }
 
@@ -133,7 +136,7 @@ function walkFields(
   prefix: string,
   registry: Map<string, LooseField>,
   out: string[],
-  insideArray: boolean,
+  visiting: Set<string>,
 ): void {
   for (const field of fields) {
     if (!field || typeof field.name !== "string") continue;
@@ -146,11 +149,11 @@ function walkFields(
     }
 
     if (Array.isArray(resolved.fields)) {
-      walkFields(resolved.fields, path, registry, out, insideArray);
+      walkNamed(resolved, field, () => walkFields(resolved.fields as LooseField[], path, registry, out, visiting), visiting);
       continue;
     }
 
-    if (!insideArray && Array.isArray(resolved.of)) {
+    if (Array.isArray(resolved.of)) {
       for (const member of resolved.of) {
         if (!member || typeof member !== "object") continue;
         const memberResolved = resolve(member, registry);
@@ -166,9 +169,18 @@ function walkFields(
           continue;
         }
         if (Array.isArray(memberResolved.fields)) {
-          walkFields(memberResolved.fields, memberPath, registry, out, true);
+          walkNamed(memberResolved, member, () => walkFields(memberResolved.fields as LooseField[], memberPath, registry, out, visiting), visiting);
         }
       }
     }
   }
+}
+
+/** Follow into a named type once per branch, so a type that refers to itself does not recurse for ever. */
+function walkNamed(resolved: LooseField, original: LooseField, walk: () => void, visiting: Set<string>): void {
+  const name = resolved !== original && typeof original.type === "string" ? original.type : undefined;
+  if (name && visiting.has(name)) return;
+  if (name) visiting.add(name);
+  walk();
+  if (name) visiting.delete(name);
 }

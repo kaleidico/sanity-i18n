@@ -1,6 +1,7 @@
 import { defineField, defineType } from "sanity";
 import type { DocumentDefinition, FieldDefinition } from "sanity";
 import { JOB_TYPE, MANIFEST_TYPE, SECRETS_TYPE } from "../core/engineModel";
+import { LEGAL_APPROVAL_TYPE } from "../core/legal";
 
 /**
  * Schema for what the translation engine writes: the per-unit source hashes
@@ -95,7 +96,107 @@ export function reportFields(): FieldDefinition[] {
     flag("held", "Held for a person"),
     texts("holdReasons", "Why it is held"),
     flag("saved", "Saved as a draft"),
+    text("status", "Status given"),
+    number("legalPending", "Legal text waiting for approval"),
+    number("legalApproved", "Legal text with approved wording"),
+    flag("published", "Published"),
+    text("publishNote", "Why it was not published"),
   ];
+}
+
+/** `i18n.legal`: how the legal text on a translation stands, kept by the engine and the approval queue. */
+export function legalRecordField(): FieldDefinition {
+  return defineField({
+    name: "legal",
+    title: "Legal text",
+    type: "object",
+    hidden: true,
+    readOnly: true,
+    description: "Which pieces of legal text on this translation are waiting for approval and which carry approved wording.",
+    fields: [
+      number("pending", "Waiting for approval"),
+      number("approved", "Approved"),
+      defineField({
+        name: "paths",
+        title: "Paths",
+        type: "array",
+        readOnly: true,
+        of: [{ type: "object", name: "legalPath", fields: [text("path", "Path"), text("unitId", "Registry entry"), text("sourceHash", "English fingerprint"), text("status", "Status")] }],
+      }),
+    ],
+  });
+}
+
+/** `i18n.staleSince`: set on a draft when the English moved after this translation was made; cleared by the next run. */
+export function staleSinceField(): FieldDefinition {
+  return defineField({
+    name: "staleSince",
+    title: "English changed at",
+    type: "datetime",
+    readOnly: true,
+    hidden: true,
+    description: "When the English document was published with changes this translation does not have yet.",
+  });
+}
+
+const person = (name: string, title: string) =>
+  defineField({ name, title, type: "object", readOnly: true, fields: [text("id", "User id"), text("name", "Name"), text("email", "Email")] });
+
+/**
+ * `i18n.legalApproval`: one entry per piece of legal English text per
+ * language. Its id has no period, so the site can read approvals without a
+ * token. Written by the engine and the approval route, never by hand.
+ */
+export function legalApprovalType(): DocumentDefinition {
+  return defineType({
+    name: LEGAL_APPROVAL_TYPE,
+    title: "Legal approval",
+    type: "document",
+    ...hiddenDocument,
+    readOnly: true,
+    fields: [
+      text("language", "Language"),
+      text("sourceHash", "English fingerprint"),
+      defineField({ name: "sourceText", title: "English", type: "text", readOnly: true }),
+      text("kind", "Kind"),
+      defineField({ name: "translatedText", title: "Translation", type: "text", readOnly: true }),
+      defineField({ name: "translatedValue", title: "Translation (stored value)", type: "text", readOnly: true, hidden: true }),
+      text("status", "Status"),
+      person("decidedBy", "Decided by"),
+      when("decidedAt", "Decided"),
+      defineField({ name: "comment", title: "Comment", type: "text", readOnly: true }),
+      text("supersededBy", "Superseded by"),
+      defineField({
+        name: "occurrences",
+        title: "Where it appears",
+        type: "array",
+        readOnly: true,
+        of: [{ type: "object", name: "occurrence", fields: [text("documentId", "Document"), text("documentType", "Type"), text("path", "Path")] }],
+      }),
+      defineField({
+        name: "history",
+        title: "History",
+        type: "array",
+        readOnly: true,
+        of: [
+          {
+            type: "object",
+            name: "decision",
+            fields: [text("status", "Outcome"), person("decidedBy", "By"), when("decidedAt", "When"), defineField({ name: "comment", title: "Comment", type: "text", readOnly: true }), text("sourceHash", "English fingerprint")],
+          },
+        ],
+      }),
+      when("createdAt", "Created"),
+      when("updatedAt", "Updated"),
+    ],
+    preview: {
+      select: { title: "sourceText", status: "status", language: "language" },
+      prepare: ({ title, status, language }) => ({
+        title: typeof title === "string" ? title.slice(0, 80) : "Legal text",
+        subtitle: `${String(language ?? "").toUpperCase()} · ${String(status ?? "")}`,
+      }),
+    },
+  });
 }
 
 /** `i18n.report`: the report of the run that produced this translation. */

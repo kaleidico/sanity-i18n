@@ -9,8 +9,10 @@ import type { SanityClient } from "sanity";
 import {
   JOB_TYPE,
   jobId,
+  LEGAL_APPROVERS_FIELD,
   MANIFEST_ID,
   MANIFEST_TYPE,
+  readLegalApprovers,
   type JobKind,
   type JobMode,
   type TranslationJob,
@@ -21,16 +23,21 @@ import { sha256Hex } from "../core/sha256";
 import { LANGUAGE_FIELD } from "../core/translations";
 
 export const DEFAULT_ENDPOINT = "/api/i18n/translate";
+export const DEFAULT_APPROVE_ENDPOINT = "/api/i18n/approve";
 
 export interface StudioEngineOptions {
   languages: LanguagesConfig;
   translatableTypes: readonly string[];
   /** Where the site mounts `createTranslateRoute()`. Defaults to `/api/i18n/translate`. */
   endpoint?: string;
+  /** Where the site mounts `createApprovalRoute()`. Defaults to `/api/i18n/approve`. */
+  approveEndpoint?: string;
   /** The Site Settings document type. Defaults to `settings`. */
   settingsType?: string;
   /** Name of the languages field on Site Settings. Defaults to `languages`. */
   languagesField?: string;
+  /** Name of the legal approvers field on Site Settings. Defaults to `i18nLegalApprovers`. */
+  legalApproversField?: string;
   /** How many translations the Translations tool runs at once. Defaults to 2. */
   concurrency?: number;
 }
@@ -70,6 +77,9 @@ export interface NewJob {
   sourceType?: string;
   sourceIds?: string[];
   requestedBy?: string;
+  unitId?: string;
+  comment?: string;
+  approver?: { id?: string; name?: string; email?: string };
 }
 
 /** Create a pending job document and return its id. */
@@ -177,6 +187,34 @@ export function useEnabledLanguageIds(client: SanityClient, options: StudioEngin
   }, [client, defaultId, settingsType, fieldName, options.languages]);
 
   return ids;
+}
+
+/** The legal approver emails from Site Settings, lower case. Null while loading. */
+export function useLegalApprovers(client: SanityClient, options: Pick<StudioEngineOptions, "settingsType" | "legalApproversField" | "languages">): string[] | null {
+  const [approvers, setApprovers] = useState<string[] | null>(null);
+  const defaultId = options.languages.defaultLanguage.id;
+  const settingsType = options.settingsType ?? "settings";
+  const fieldName = options.legalApproversField ?? LEGAL_APPROVERS_FIELD;
+
+  useEffect(() => {
+    let alive = true;
+    client
+      .fetch<Record<string, unknown> | null>(
+        `*[_type == $type && (${LANGUAGE_FIELD} == $lang || !defined(${LANGUAGE_FIELD})) && !(_id in path("drafts.**"))][0]{ ${JSON.stringify(fieldName)}: ${fieldName} }`,
+        { type: settingsType, lang: defaultId },
+      )
+      .then((settings) => {
+        if (alive) setApprovers(readLegalApprovers(settings, fieldName));
+      })
+      .catch(() => {
+        if (alive) setApprovers([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [client, defaultId, settingsType, fieldName]);
+
+  return approvers;
 }
 
 export function formatDollars(amount: number): string {

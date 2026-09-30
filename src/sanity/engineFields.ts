@@ -1,6 +1,6 @@
 import { defineField } from "sanity";
 import type { FieldDefinition } from "sanity";
-import { API_KEY_FIELD, ENGINE_FIELD, GLOSSARY_FIELD, STYLE_GUIDE_FIELD } from "../core/engineModel";
+import { API_KEY_FIELD, ENGINE_FIELD, GLOSSARY_FIELD, LEGAL_APPROVERS_FIELD, STYLE_GUIDE_FIELD } from "../core/engineModel";
 import { DEFAULT_REVIEWER_MODEL, DEFAULT_TRANSLATOR_MODEL, MODELS } from "../core/pricing";
 import { ApiKeyInput } from "./ApiKeyInput";
 import { LANGUAGES_GROUP } from "./languagesField";
@@ -150,11 +150,31 @@ export function engineField(options: EngineFieldOptions = {}): FieldDefinition {
         name: "autoPublishMarketing",
         title: "Publish marketing pages automatically",
         type: "boolean",
-        initialValue: false,
-        readOnly: true,
-        description: "Reserved for the review workflow. For now every translation is saved as a draft and nothing is published.",
+        initialValue: true,
+        description:
+          "On: a translation goes live as soon as both checks pass and no legal text on it is waiting for approval. Off: every translation stays a draft until a person publishes it. Legal text always waits for an approver either way.",
       }),
     ],
+    ...grouped(options),
+  });
+}
+
+/**
+ * Who may approve legal text in another language: a list of email addresses,
+ * as the people sign in to the Studio. Sanity's own Editor role gives the
+ * right to edit; this list says who signs off legal wording. Everyone else
+ * sees the Legal approvals queue read only.
+ */
+export function legalApproversField(options: EngineFieldOptions = {}): FieldDefinition {
+  return defineField({
+    name: options.name ?? LEGAL_APPROVERS_FIELD,
+    title: "Legal approvers",
+    type: "array",
+    of: [{ type: "string", validation: (rule) => rule.email() }],
+    options: { layout: "tags", ...notTranslated },
+    validation: (rule) => rule.unique(),
+    description:
+      "Email addresses of the people who may approve or send back legal text in another language, exactly as they sign in to the Studio. Everyone else can see the Legal approvals queue but not decide.",
     ...grouped(options),
   });
 }

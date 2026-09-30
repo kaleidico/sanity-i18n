@@ -52,10 +52,18 @@ export function translationMetaType(options: TranslationMetaOptions): DocumentDe
             fields: [
               defineField({ name: "language", title: "Language", type: "string", validation: (rule) => rule.required() }),
               defineField({ name: "document", title: "Document", type: "reference", to, weak: true }),
+              defineField({ name: "staleSince", title: "English changed at", type: "datetime", readOnly: true }),
             ],
             preview: { select: { title: "language", subtitle: "document._ref" } },
           },
         ],
+      }),
+      defineField({
+        name: "staleSince",
+        title: "English changed at",
+        type: "datetime",
+        readOnly: true,
+        description: "When the source was last published with changes some translation does not have yet.",
       }),
     ],
     preview: {

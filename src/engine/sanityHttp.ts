@@ -1,7 +1,9 @@
 /**
  * A very small Sanity client over `fetch`, so the engine needs no Sanity
- * package on the server. Four calls: query, read by id, read several by id,
- * and mutate. Queries use the raw perspective so drafts are visible.
+ * package on the server. Five calls: query, read by id, read several by id,
+ * mutate, and the author of a document's first transaction (from the history
+ * API, to check who created a job). Queries use the raw perspective so drafts
+ * are visible.
  */
 import { EngineError } from "./errors";
 
@@ -12,6 +14,12 @@ export interface SanityLike {
   getDocument(id: string): Promise<Json | null>;
   getDocuments(ids: readonly string[]): Promise<Json[]>;
   mutate(mutations: readonly Json[]): Promise<void>;
+  /**
+   * The Sanity user id that created a document, from its transaction history.
+   * Null when the history has no author. Optional: a client without it cannot
+   * verify who created a job, and the approval route then refuses.
+   */
+  documentAuthor?(id: string): Promise<string | null>;
 }
 
 export interface SanityHttpConfig {
@@ -73,6 +81,28 @@ export function createSanityHttp(config: SanityHttpConfig): SanityLike {
     },
     async mutate(mutations: readonly Json[]): Promise<void> {
       await request(`/mutate/${config.dataset}?visibility=sync`, { method: "POST", body: JSON.stringify({ mutations }) });
+    },
+    async documentAuthor(id: string): Promise<string | null> {
+      // The history endpoint answers with one JSON object per line, oldest first.
+      if (!config.projectId || !config.dataset || !config.token) throw new EngineError("dataset");
+      let response: Response;
+      try {
+        response = await doFetch(`${base}/history/${config.dataset}/transactions/${encodeURIComponent(id)}?excludeContent=true&limit=1`, {
+          headers: { Authorization: `Bearer ${config.token}` },
+        });
+      } catch {
+        throw new EngineError("dataset");
+      }
+      if (!response.ok) throw new EngineError("dataset", { details: [`Sanity answered ${response.status}`] });
+      const text = await response.text();
+      const first = text.split("\n").find((line) => line.trim() !== "");
+      if (!first) return null;
+      try {
+        const parsed = JSON.parse(first) as { author?: unknown };
+        return typeof parsed.author === "string" ? parsed.author : null;
+      } catch {
+        return null;
+      }
     },
   };
 }

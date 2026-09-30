@@ -8,25 +8,32 @@
 import {
   JOB_TYPE,
   MANIFEST_ID,
+  isLegalApprover,
   readEngineSettings,
   readGlossary,
+  readLegalApprovers,
   readStyleGuide,
   translationId,
   ENGINE_FIELD,
   GLOSSARY_FIELD,
+  LEGAL_APPROVERS_FIELD,
   STYLE_GUIDE_FIELD,
+  type ApprovalOutcome,
   type CostEstimate,
+  type JobKind,
   type JobStatus,
   type TranslationJob,
   type TranslationReport,
 } from "../core/engineModel";
 import { defineLanguages, readEnabledLanguages, type LanguagesInput } from "../core/languages";
+import { legalApprovalId, legalSourceHash, legalUnitsOf, planLegalRegistry, statusAfterRun, unitText, LEGAL_APPROVAL_TYPE, type LegalApproval } from "../core/legal";
 import type { FieldManifest } from "../core/manifest";
 import { I18N_FIELD, LANGUAGE_FIELD, TRANSLATION_META_TYPE, translationMetaId } from "../core/translations";
 import { countTokens, createAnthropicClient, type AnthropicLike, type CallPolicy, type Effort } from "./anthropic";
 import { reportForStorage, translateDocument } from "./document";
 import { asEngineError, EngineError } from "./errors";
 import { estimateCost, type TokenCounter } from "./estimate";
+import { approveUnit, publishTranslation, sendBackUnit } from "./legal";
 import { createSanityHttp, type SanityHttpConfig, type SanityLike } from "./sanityHttp";
 import { loadApiKey } from "./secrets";
 
@@ -41,8 +48,19 @@ export interface EngineConfig {
   privateKey?: string;
   /** The public key (SPKI, base64). Defaults to `NEXT_PUBLIC_I18N_PUBLIC_KEY`. Only used to explain a key pair mismatch. */
   publicKey?: string;
-  /** Where the glossary, style guide and engine settings live. Defaults to the `settings` type and the package's field names. */
-  settings?: { type?: string; glossaryField?: string; styleGuideField?: string; engineField?: string; languagesField?: string };
+  /** Where the glossary, style guide, engine settings and approver list live. Defaults to the `settings` type and the package's field names. */
+  settings?: { type?: string; glossaryField?: string; styleGuideField?: string; engineField?: string; languagesField?: string; legalApproversField?: string };
+  /**
+   * Publish a translation as soon as it is approved. Defaults to the
+   * "Publish marketing pages automatically" switch in Site Settings (on
+   * unless switched off). Pass false to keep every translation a draft.
+   */
+  autoPublish?: boolean;
+  /**
+   * Check that an approval job was created by the Studio user it names, from
+   * the document's transaction history. Defaults to true. Only for tests.
+   */
+  verifyJobAuthor?: boolean;
   /** The field manifest. Defaults to the one the Studio keeps in the private `i18n.manifest` document. */
   manifest?: FieldManifest;
   /** Build the Anthropic client for a key. Defaults to the real SDK client; tests pass a fake. */
@@ -213,14 +231,88 @@ async function runTranslate(ctx: RunContext): Promise<{ status: JobStatus; repor
     }
   }
   report.saved = true;
-  (translation[I18N_FIELD] as Json).report = reportForStorage(report);
 
-  const mutations: Json[] = [{ createOrReplace: { ...translation, _id: `drafts.${targetId}`, _type: typeName } }];
+  // Legal text: reuse approved wording, queue what is new, and settle the status.
+  await ctx.progress("Checking legal text against the approval registry");
+  const legalUnits = legalUnitsOf(source, manifest, typeName);
+  const entryIds = legalUnits.map((u) => legalApprovalId(target.id, legalSourceHash(unitText(u.value))));
+  const registryDocs = entryIds.length > 0 ? await sanity.getDocuments([...new Set(entryIds)]) : [];
+  const entries = new Map(registryDocs.filter((d) => d._type === LEGAL_APPROVAL_TYPE).map((d) => [String(d._id), d as unknown as LegalApproval]));
+  const nowIso = (config.now ?? (() => new Date()))().toISOString();
+  const plan = planLegalRegistry({
+    language: target.id,
+    documentId: targetId,
+    documentType: typeName,
+    units: legalUnits,
+    translation,
+    entries,
+    now: nowIso,
+    by: job.requestedBy ? { name: job.requestedBy } : undefined,
+  });
+  const i18n = translation[I18N_FIELD] as Json;
+  const status = statusAfterRun(report.held, plan.legal);
+  i18n.legal = plan.legal;
+  i18n.status = status;
+  if (status === "approved") {
+    i18n.approvedAt = nowIso;
+    i18n.approvedBy = "Translation engine: both checks passed and no legal text is waiting";
+  }
+  report.status = status;
+  report.legalPending = plan.legal.pending;
+  report.legalApproved = plan.legal.approved;
+  report.published = false;
+  i18n.report = reportForStorage(report);
+
+  const mutations: Json[] = [{ createOrReplace: { ...translation, _id: `drafts.${targetId}`, _type: typeName } }, ...plan.mutations];
   const meta = await metaMutation(sanity, sourceId, typeName, defaultLanguage.id, target.id, targetId);
   if (meta) mutations.push(meta);
   await sanity.mutate(mutations);
 
+  // Review model b: marketing content goes live on its own once both checks pass.
+  const autoPublish = config.autoPublish ?? readEngineSettings(settings, config.settings?.engineField ?? ENGINE_FIELD).autoPublishMarketing;
+  if (status === "approved" && autoPublish) {
+    await ctx.progress("Publishing");
+    const result = await publishTranslation(sanity, `drafts.${targetId}`, { manifest, now: config.now });
+    report.published = result.published;
+    if (!result.published && result.reason) report.publishNote = result.reason;
+    if (result.published) {
+      // The report on the published document says so too.
+      await sanity.mutate([{ patch: { id: targetId, set: { [`${I18N_FIELD}.report.published`]: true } } }]);
+    }
+  }
+
   return { status: report.held ? "held" : "done", report };
+}
+
+/** Who may decide: the job's approver must be on the list in Site Settings, and must be the user who created the job. */
+async function runApproval(ctx: RunContext): Promise<ApprovalOutcome> {
+  const { config, sanity, job } = ctx;
+  const languages = defineLanguages(config.languages);
+  const settings = await loadSettings(config, sanity, languages.defaultLanguage.id);
+  const approvers = readLegalApprovers(settings, config.settings?.legalApproversField ?? LEGAL_APPROVERS_FIELD);
+  const approver = job.approver ?? {};
+  if (!isLegalApprover(approver.email, approvers)) throw new EngineError("not_an_approver");
+  if (config.verifyJobAuthor !== false) {
+    if (typeof sanity.documentAuthor !== "function" || !approver.id) throw new EngineError("approver_unverified");
+    const author = await sanity.documentAuthor(job._id);
+    if (!author || author !== approver.id) throw new EngineError("approver_unverified");
+  }
+  const unitId = String(job.unitId ?? "");
+  if (unitId === "") throw new EngineError("unit_not_found");
+  const decidedBy = { id: approver.id, name: approver.name, email: approver.email };
+  const input = {
+    sanity,
+    unitId,
+    decidedBy,
+    comment: job.comment,
+    autoPublish: config.autoPublish,
+    settingsType: config.settings?.type,
+    engineField: config.settings?.engineField,
+    manifest: config.manifest,
+    now: config.now,
+  };
+  await ctx.progress(job.kind === "approve" ? "Approving" : "Sending back");
+  return job.kind === "approve" ? approveUnit(input) : sendBackUnit(input);
 }
 
 async function runEstimate(ctx: RunContext): Promise<CostEstimate> {
@@ -282,7 +374,10 @@ async function pruneOldJobs(sanity: SanityLike, now: Date): Promise<void> {
  * failure after the job is claimed is written to the job in plain words, so
  * the person waiting in the Studio always gets an answer.
  */
-export async function runJob(config: EngineConfig, id: string): Promise<JobOutcome> {
+export const TRANSLATE_JOB_KINDS: readonly JobKind[] = ["translate", "estimate"];
+export const APPROVAL_JOB_KINDS: readonly JobKind[] = ["approve", "send_back"];
+
+export async function runJob(config: EngineConfig, id: string, allowedKinds: readonly JobKind[] = TRANSLATE_JOB_KINDS): Promise<JobOutcome> {
   const now = config.now ?? (() => new Date());
   const fail = (httpStatus: number, error: EngineError): JobOutcome => ({
     httpStatus,
@@ -299,6 +394,7 @@ export async function runJob(config: EngineConfig, id: string): Promise<JobOutco
     return fail(500, asEngineError(error));
   }
   if (!job || job._type !== JOB_TYPE) return fail(404, new EngineError("job_not_found"));
+  if (!allowedKinds.includes(job.kind)) return fail(400, new EngineError("wrong_route"));
   if (job.status !== "pending") return fail(409, new EngineError("job_not_pending"));
 
   // Claim the job. The revision check makes a second request for the same job lose.
@@ -348,6 +444,10 @@ export async function runJob(config: EngineConfig, id: string): Promise<JobOutco
     if (job.kind === "estimate") {
       const estimate = await Promise.race([runEstimate(ctx), deadline]);
       set = { status: "done", estimate, progress: "Finished" };
+      outcome = { httpStatus: 200, ok: true, status: "done" };
+    } else if (job.kind === "approve" || job.kind === "send_back") {
+      const approval = await Promise.race([runApproval(ctx), deadline]);
+      set = { status: "done", approval, progress: "Finished" };
       outcome = { httpStatus: 200, ok: true, status: "done" };
     } else {
       const { status, report } = await Promise.race([runTranslate(ctx), deadline]);

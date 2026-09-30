@@ -10,9 +10,9 @@
  *   export const maxDuration = 300;
  *   export const { POST } = createTranslateRoute({ sanity: { projectId, dataset, token }, languages });
  */
-import { JOB_ID_PREFIX } from "../core/engineModel";
+import { JOB_ID_PREFIX, type JobKind } from "../core/engineModel";
 import { EngineError } from "./errors";
-import { runJob, type EngineConfig, type JobOutcome } from "./job";
+import { APPROVAL_JOB_KINDS, runJob, TRANSLATE_JOB_KINDS, type EngineConfig, type JobOutcome } from "./job";
 
 function assertServer(): void {
   if (typeof window !== "undefined" || typeof document !== "undefined") {
@@ -38,7 +38,7 @@ export interface TranslateRoute {
   POST(request: Request): Promise<Response>;
 }
 
-export function createTranslateRoute(config: EngineConfig): TranslateRoute {
+function createJobRoute(config: EngineConfig, kinds: readonly JobKind[]): TranslateRoute {
   return {
     async POST(request: Request): Promise<Response> {
       const refuse = () => {
@@ -57,9 +57,26 @@ export function createTranslateRoute(config: EngineConfig): TranslateRoute {
       // A job id and nothing else: no document ids, no text, no options.
       if (keys.length !== 1 || typeof id !== "string" || !JOB_ID.test(id)) return refuse();
 
-      return json(await runJob(config, id));
+      return json(await runJob(config, id, kinds));
     },
   };
+}
+
+/** The translation route: runs `translate` and `estimate` jobs. */
+export function createTranslateRoute(config: EngineConfig): TranslateRoute {
+  return createJobRoute(config, TRANSLATE_JOB_KINDS);
+}
+
+/**
+ * The approval route: runs `approve` and `send_back` jobs, after checking
+ * that the job names a listed legal approver and was created by that Studio
+ * user. Mount it next to the translation route:
+ *
+ *   // src/app/api/i18n/approve/route.ts
+ *   export const { POST } = createApprovalRoute({ sanity: { projectId, dataset, token }, languages });
+ */
+export function createApprovalRoute(config: EngineConfig): TranslateRoute {
+  return createJobRoute(config, APPROVAL_JOB_KINDS);
 }
 
 export type { EngineConfig, JobOutcome } from "./job";

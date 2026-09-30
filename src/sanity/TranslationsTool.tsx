@@ -35,6 +35,8 @@ interface TranslationRow {
   source?: string;
   status?: string;
   hasHashes?: boolean;
+  /** The English moved since this translation was made (set by the stale check on publish). */
+  stale?: boolean;
 }
 
 interface TypeCounts {
@@ -78,7 +80,7 @@ function summarise(sources: SourceRow[], translations: TranslationRow[], types: 
         continue;
       }
       counts.translated++;
-      if (translation.status === "needs_update") {
+      if (translation.status === "needs_update" || translation.stale) {
         counts.needsUpdate++;
         counts.work.push({ sourceId: source._id, mode: translation.hasHashes ? "changes" : "full" });
       } else if (translation.status === "awaiting_approval") counts.awaitingApproval++;
@@ -137,7 +139,7 @@ function TranslationsToolView({ tool }: { tool: Tool<TranslationsToolOptions> })
         { perspective: "raw" },
       ),
       client.fetch<TranslationRow[]>(
-        `*[_type in $types && ${LANGUAGE_FIELD} == $lang]{ _id, _type, "source": ${I18N_FIELD}.source._ref, "status": ${I18N_FIELD}.status, "hasHashes": defined(${I18N_FIELD}.sourceHashes) }`,
+        `*[_type in $types && ${LANGUAGE_FIELD} == $lang]{ _id, _type, "source": ${I18N_FIELD}.source._ref, "status": ${I18N_FIELD}.status, "hasHashes": defined(${I18N_FIELD}.sourceHashes), "stale": defined(${I18N_FIELD}.staleSince) }`,
         { types, lang: languageId },
         { perspective: "raw" },
       ),
@@ -237,7 +239,10 @@ function TranslationsToolView({ tool }: { tool: Tool<TranslationsToolOptions> })
             refused = message;
           });
           const job: TranslationJob | null = await watchJob(client, id, () => undefined, { cancelled: () => !alive.current || refused !== null });
-          if (job?.status === "done") update(index, { state: "done", message: job.report?.saved ? "Draft saved" : "Already up to date" });
+          if (job?.status === "done") {
+            const r = job.report;
+            update(index, { state: "done", message: !r?.saved ? "Already up to date" : r.published ? "Published" : r.status === "awaiting_approval" ? "Draft saved, legal text awaiting approval" : "Draft saved" });
+          }
           else if (job?.status === "held") update(index, { state: "held", message: job.report?.holdReasons[0] ?? "Held for a person to look at" });
           else update(index, { state: "failed", message: job?.error?.message ?? refused ?? "Did not finish in time" });
         } catch {
@@ -273,7 +278,7 @@ function TranslationsToolView({ tool }: { tool: Tool<TranslationsToolOptions> })
         <Stack space={3}>
           <Heading size={2}>Translations</Heading>
           <Text size={1} muted>
-            Where every translatable document stands, per language. Estimate the cost before a run; a run saves drafts and publishes nothing.
+            Where every translatable document stands, per language. Estimate the cost before a run. A run saves drafts; a translation that passes both checks and carries no legal text waiting for approval goes live on its own when "Publish marketing pages automatically" is on in Site Settings. Legal text waits in Legal approvals.
           </Text>
         </Stack>
 
@@ -347,7 +352,7 @@ function TranslationsToolView({ tool }: { tool: Tool<TranslationsToolOptions> })
             </Card>
 
             <Text size={1} muted>
-              "To do" counts documents with no {language?.title} version yet, plus the ones marked Needs update. Tick types to limit a run; with nothing ticked a run covers all of them.
+              "To do" counts documents with no {language?.title} version yet, plus the ones marked Needs update or re-locked because the English changed. Tick types to limit a run; with nothing ticked a run covers all of them.
             </Text>
 
             <Flex gap={2} align="center" wrap="wrap">

@@ -22,7 +22,7 @@ import {
   type TranslationLabels,
 } from "../core/translations";
 
-import { reportField, sourceHashesField } from "./engineTypes";
+import { legalRecordField, reportField, sourceHashesField, staleSinceField } from "./engineTypes";
 
 /** The marker `translatable()` stores on the type definition. */
 export const I18N_MARKER = "__i18n";
@@ -84,7 +84,8 @@ function sharedNote(defaultTitle: string): string {
  * - `language` (string, read only, initial value = default language)
  * - `i18n` (object "Translation"): `source` reference, `status`, `sourceHash`,
  *   `translatedAt`, `approvedAt`, `approvedBy`, and the engine's hidden
- *   `sourceHashes` and `report`. Hidden on default-language documents.
+ *   `sourceHashes`, `report`, `legal`, `staleSince` and `publishedAt`. Hidden
+ *   on default-language documents.
  *
  * And on the existing fields:
  * - every `sharedFields` entry becomes read only on translations, with a note
@@ -158,6 +159,9 @@ export function translatable<T extends DocumentDefinition>(documentType: T, opti
       defineField({ name: "translatedAt", title: "Translated at", type: "datetime", readOnly: true }),
       defineField({ name: "approvedAt", title: "Approved at", type: "datetime", readOnly: true }),
       defineField({ name: "approvedBy", title: "Approved by", type: "string", readOnly: true }),
+      defineField({ name: "publishedAt", title: "Published at", type: "datetime", readOnly: true, hidden: true }),
+      staleSinceField(),
+      legalRecordField(),
       reportField(),
     ],
   });

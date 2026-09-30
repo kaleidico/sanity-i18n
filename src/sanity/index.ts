@@ -5,7 +5,8 @@
  * the document-level translation model (`translatable`, legal marks, the
  * metadata document), the desk helpers, the Studio plugin, and the Studio
  * side of the translation engine (settings fields, the key input, the
- * translate action, the stale check on publish and the Translations tool).
+ * translate action, the stale check on publish, the publish rule on
+ * translations, the Translations tool and the Legal approvals tool).
  */
 export {
   defineLanguages,
@@ -91,6 +92,7 @@ export {
   styleGuideField,
   engineField,
   apiKeyField,
+  legalApproversField,
   type EngineFieldOptions,
   type ApiKeyFieldOptions,
 } from "./engineFields";
@@ -99,7 +101,42 @@ export { ApiKeyInput, KEY_STORAGE_NOT_CONFIGURED } from "./ApiKeyInput";
 
 export { translateAction, JobOutcomeView, type TranslateActionOptions } from "./translateAction";
 
-export { publishWithStaleCheck, type PublishWithStaleCheckOptions } from "./publishWithStaleCheck";
+export { publishWithStaleCheck, staleToast, type PublishWithStaleCheckOptions } from "./publishWithStaleCheck";
+
+export { publishTranslationAction, type PublishTranslationActionOptions } from "./publishTranslationAction";
+
+export { legalApprovalsTool, resubmitLegalUnit, buildLog, LEGAL_APPROVER_NOTICE, type LegalApprovalsToolOptions } from "./LegalApprovalsTool";
+
+export {
+  LEGAL_APPROVAL_TYPE,
+  LEGAL_APPROVAL_ID_PREFIX,
+  normaliseLegalText,
+  legalSourceHash,
+  legalApprovalId,
+  unitText,
+  occurrenceKey,
+  legalUnitsOf,
+  parseLegalValue,
+  applyLegalValue,
+  planLegalRegistry,
+  statusAfterRun,
+  checkTranslationForPublish,
+  planStaleTranslations,
+  legalPathSegments,
+  type LegalApproval,
+  type LegalApprovalStatus,
+  type LegalPerson,
+  type LegalOccurrence,
+  type LegalDecision,
+  type LegalPathRecord,
+  type LegalRecord,
+  type LegalPlanInput,
+  type LegalPlan,
+  type PublishCheck,
+  type StalePlanInput,
+  type StalePlan,
+  type StaleMark,
+} from "../core/legal";
 
 export { translationsTool, summariseTranslations, type TranslationsToolOptions } from "./TranslationsTool";
 
@@ -108,7 +145,9 @@ export {
   createJob,
   startJob,
   watchJob,
+  useLegalApprovers,
   DEFAULT_ENDPOINT,
+  DEFAULT_APPROVE_ENDPOINT,
   type StudioEngineOptions,
   type NewJob,
 } from "./studioEngine";
@@ -117,9 +156,12 @@ export {
   translationJobType,
   translationSecretsType,
   translationManifestType,
+  legalApprovalType,
   sourceHashesField,
   reportField,
   reportFields,
+  legalRecordField,
+  staleSinceField,
 } from "./engineTypes";
 
 export {
@@ -150,6 +192,9 @@ export {
   readGlossary,
   readStyleGuide,
   readEngineSettings,
+  readLegalApprovers,
+  isLegalApprover,
+  LEGAL_APPROVERS_FIELD,
   SECRETS_ID,
   SECRETS_TYPE,
   MANIFEST_ID,
@@ -169,7 +214,9 @@ export {
   type TranslationJob,
   type TranslationReport,
   type CostEstimate,
+  type ApprovalOutcome,
   type ReviewIssue,
+  type JobKind,
   type JobMode,
   type JobStatus,
 } from "../core/engineModel";

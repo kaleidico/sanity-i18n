@@ -33,7 +33,7 @@ test("engine entries load on the server and expose the engine and the route", as
   }
   const route = await import("../dist/engine/route/index.js");
   assert.equal(typeof route.createTranslateRoute, "function");
-  assert.deepEqual(Object.keys(route), ["createTranslateRoute"]);
+  assert.deepEqual(Object.keys(route), ["createApprovalRoute", "createTranslateRoute"]);
 });
 
 test("engine entries refuse to load in a browser", async () => {

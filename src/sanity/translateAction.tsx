@@ -129,9 +129,16 @@ export function JobOutcomeView({ job, languageTitle }: { job: TranslationJob; la
         </Line>
         {report.check1Warnings.length > 0 ? <Line>{report.check1Warnings.length} value(s) are written in a different format. Worth a look.</Line> : null}
         {notes > 0 ? <Line>The reviewer left {notes} note(s), none of them serious.</Line> : <Line>The reviewer found nothing to report.</Line>}
-        {report.legalPaths.length > 0 ? <Line>{report.legalPaths.length} piece(s) of legal text need approval before this can go live.</Line> : null}
+        {(report.legalPending ?? 0) > 0 ? <Line>{report.legalPending} piece(s) of legal text are waiting in Legal approvals. The {languageTitle} page stays unpublished until they are approved.</Line> : null}
+        {(report.legalApproved ?? 0) > 0 ? <Line>{report.legalApproved} piece(s) of legal text carry wording that was approved before.</Line> : null}
         {report.inputTokens > 0 ? usage : <Line muted>No text needed translating, so nothing was sent to Anthropic.</Line>}
-        <Line muted>It is a draft. Nothing has been published.</Line>
+        {report.published ? (
+          <Line>Published: both checks passed and no legal text is waiting.</Line>
+        ) : report.status === "approved" ? (
+          <Line muted>Approved and saved as a draft. {report.publishNote ?? "Publish it from the document when ready."}</Line>
+        ) : (
+          <Line muted>It is a draft. Nothing has been published.</Line>
+        )}
       </Stack>
     </Card>
   );
@@ -207,7 +214,7 @@ function TranslateDialog({ options, sourceId, sourceType, onClose }: DialogProps
         {!running && !finished ? (
           <Stack space={4}>
             <Line>
-              The published English is sent to Anthropic with the API key saved in Site Settings, translated as a whole with the site's glossary and style guide, checked twice, and saved as a {title} draft. Nothing is published.
+              The published English is sent to Anthropic with the API key saved in Site Settings, translated as a whole with the site's glossary and style guide, and checked twice. Legal text goes to the Legal approvals queue. A page with no legal text waiting is published when automatic publishing is on in Site Settings; otherwise it is saved as a {title} draft.
             </Line>
             {existing === undefined ? <Line muted>Looking for an existing {title} version</Line> : null}
             {existing ? (

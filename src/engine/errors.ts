@@ -30,6 +30,12 @@ export type EngineErrorCode =
   | "check_failed"
   | "declined"
   | "dataset"
+  | "wrong_route"
+  | "unit_not_found"
+  | "unit_not_pending"
+  | "comment_required"
+  | "not_an_approver"
+  | "approver_unverified"
   | "unexpected";
 
 export const KEY_STORAGE_NOT_CONFIGURED = "Translation key storage is not configured on this server yet.";
@@ -60,6 +66,12 @@ const MESSAGES: Record<EngineErrorCode, string> = {
   check_failed: "A number, link or other exact value in the translation does not match the English. Nothing was saved.",
   declined: "The model declined to translate this document. Nothing was saved.",
   dataset: "The server could not read or write the content. Check the site's Sanity token.",
+  wrong_route: "That job belongs to another route.",
+  unit_not_found: "That piece of legal text is not in the approval queue.",
+  unit_not_pending: "That piece of legal text is not waiting for a decision.",
+  comment_required: "A comment is needed to send legal text back, so the editor knows what to change.",
+  not_an_approver: "Only a listed legal approver can approve or send back legal text. The list is in Site Settings under Languages.",
+  approver_unverified: "The approver could not be verified, so nothing was changed. Try again in a moment.",
   unexpected: "Something unexpected went wrong. Nothing was saved.",
 };
 

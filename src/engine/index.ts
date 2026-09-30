@@ -29,7 +29,38 @@ export {
 } from "../core/languages";
 
 export { translateDocument, reportForStorage, type TranslateDocumentInput, type TranslateDocumentResult } from "./document";
-export { runJob, resolveSanity, type EngineConfig, type JobOutcome } from "./job";
+export { runJob, resolveSanity, TRANSLATE_JOB_KINDS, APPROVAL_JOB_KINDS, type EngineConfig, type JobOutcome } from "./job";
+export { publishTranslation, approveUnit, sendBackUnit, readStoredManifest, type PublishTranslationOptions, type PublishTranslationResult, type DecisionInput } from "./legal";
+export {
+  LEGAL_APPROVAL_TYPE,
+  LEGAL_APPROVAL_ID_PREFIX,
+  normaliseLegalText,
+  legalSourceHash,
+  legalApprovalId,
+  unitText,
+  occurrenceKey,
+  legalUnitsOf,
+  parseLegalValue,
+  applyLegalValue,
+  planLegalRegistry,
+  statusAfterRun,
+  checkTranslationForPublish,
+  planStaleTranslations,
+  legalPathSegments,
+  type LegalApproval,
+  type LegalApprovalStatus,
+  type LegalPerson,
+  type LegalOccurrence,
+  type LegalDecision,
+  type LegalPathRecord,
+  type LegalRecord,
+  type LegalPlanInput,
+  type LegalPlan,
+  type PublishCheck,
+  type StalePlanInput,
+  type StalePlan,
+  type StaleMark,
+} from "../core/legal";
 export { estimateCost, tokensFromCharacters, type EstimateCostInput, type TokenCounter } from "./estimate";
 export { translateUnits, chunkUnits, translatorRequestPreview, DEFAULT_MAX_CHARS_PER_REQUEST, type TranslateUnitsInput, type TranslateUnitsResult } from "./translate";
 export { reviewTranslation, parseReviewerResponse, reviewerRequest, type ReviewInput, type ReviewResult } from "./review";
@@ -98,6 +129,10 @@ export {
   readGlossary,
   readStyleGuide,
   readEngineSettings,
+  readLegalApprovers,
+  isLegalApprover,
+  LEGAL_APPROVERS_FIELD,
+  ENGINE_SETTINGS_FIELDS,
   SECRETS_ID,
   SECRETS_TYPE,
   MANIFEST_ID,
@@ -115,6 +150,7 @@ export {
   type TranslationJob,
   type TranslationReport,
   type CostEstimate,
+  type ApprovalOutcome,
   type ReviewIssue,
   type JobKind,
   type JobMode,

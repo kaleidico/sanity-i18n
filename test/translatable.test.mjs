@@ -48,7 +48,7 @@ test("translatable adds language and i18n at the top and keeps the rest", () => 
   assert.equal(i18n.title, "Translation");
   assert.deepEqual(
     i18n.fields.map((f) => f.name),
-    ["source", "status", "sourceHash", "sourceHashes", "translatedAt", "approvedAt", "approvedBy", "report"],
+    ["source", "status", "sourceHash", "sourceHashes", "translatedAt", "approvedAt", "approvedBy", "publishedAt", "staleSince", "legal", "report"],
   );
   const source = i18n.fields.find((f) => f.name === "source");
   assert.equal(source.type, "reference");

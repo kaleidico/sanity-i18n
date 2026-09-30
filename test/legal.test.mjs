@@ -28,7 +28,7 @@ test("legalBlock marks an object type the same way", () => {
   assert.equal(block.description, LEGAL_NOTE);
 });
 
-test("collectLegalPaths walks fields, objects and one level into arrays", () => {
+test("collectLegalPaths walks fields, objects and arrays", () => {
   const consentField = {
     type: "object",
     name: "consentField",
@@ -84,4 +84,26 @@ test("collectLegalPaths walks fields, objects and one level into arrays", () => 
   ]);
 
   assert.deepEqual(collectLegalPaths({ name: "x", type: "document" }), []);
+});
+
+test("collectLegalPaths follows arrays inside array members, and a self-referring type once", () => {
+  // A form block inside a page's blocks, with the consent field two arrays deep: what NOVA's page builder does.
+  const consentField = { type: "object", name: "consentField", fields: [legalText({ name: "label", type: "string" }), legalText({ name: "consentText", type: "array", of: [{ type: "block" }] })] };
+  const formBlock = { name: "formBlock", type: "object", fields: [{ name: "heading", type: "string" }, { name: "fields", type: "array", of: [{ type: "object", name: "textField", fields: [{ name: "label", type: "string" }] }, consentField] }] };
+  const navItem = { name: "navItem", type: "object", fields: [legalText({ name: "label", type: "string" }), { name: "children", type: "array", of: [{ type: "navItem" }] }] };
+  const doc = {
+    name: "page",
+    type: "document",
+    fields: [
+      { name: "blocks", type: "array", of: [{ type: "formBlock" }] },
+      { name: "legalLinks", type: "array", of: [{ type: "object", fields: [legalText({ name: "label", type: "string" }), { name: "href", type: "string" }] }] },
+      { name: "nav", type: "array", of: [{ type: "navItem" }] },
+    ],
+  };
+  assert.deepEqual(collectLegalPaths(doc, { types: [formBlock, navItem] }), [
+    "blocks[formBlock].fields[consentField].label",
+    "blocks[formBlock].fields[consentField].consentText",
+    "legalLinks[].label",
+    "nav[navItem].label",
+  ]);
 });

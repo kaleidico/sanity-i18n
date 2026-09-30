@@ -99,10 +99,11 @@ test("a job translates the page, writes a draft and the metadata, and records th
 
   const draft = sanity.store.get("drafts.page-conventional-loans-es");
   assert.ok(draft, "the translation is written as a draft");
-  assert.equal(sanity.store.has("page-conventional-loans-es"), false, "nothing is published");
+  assert.equal(sanity.store.has("page-conventional-loans-es"), false, "nothing is published: the disclaimer is legal text waiting for approval");
   assert.equal(draft._type, "page");
   assert.equal(draft.language, "es");
-  assert.equal(draft.i18n.status, "draft");
+  assert.equal(draft.i18n.status, "awaiting_approval");
+  assert.deepEqual([draft.i18n.legal.pending, draft.i18n.legal.approved], [1, 0]);
   assert.equal(draft.i18n.source._ref, "page-conventional-loans");
   assert.equal(draft.slug.current, "prestamos-convencionales");
   assert.equal(draft.i18n.report.saved, true);

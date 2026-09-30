@@ -46,9 +46,10 @@ export const GLOSSARY_FIELD = "i18nGlossary";
 export const STYLE_GUIDE_FIELD = "i18nStyleGuide";
 export const ENGINE_FIELD = "i18nEngine";
 export const API_KEY_FIELD = "i18nApiKey";
+export const LEGAL_APPROVERS_FIELD = "i18nLegalApprovers";
 
 /** The settings fields the engine adds. On a translatable settings type they belong in `sharedFields`. */
-export const ENGINE_SETTINGS_FIELDS = [GLOSSARY_FIELD, STYLE_GUIDE_FIELD, ENGINE_FIELD, API_KEY_FIELD] as const;
+export const ENGINE_SETTINGS_FIELDS = [GLOSSARY_FIELD, STYLE_GUIDE_FIELD, ENGINE_FIELD, API_KEY_FIELD, LEGAL_APPROVERS_FIELD] as const;
 
 export interface GlossaryTerm {
   source: string;
@@ -74,7 +75,11 @@ export interface StyleGuide {
 export interface EngineSettings {
   translatorModel: string;
   reviewerModel: string;
-  /** Reserved for the review workflow. The engine never publishes. */
+  /**
+   * Publish a translation as soon as both checks pass and no legal text on it
+   * is waiting for approval (review model b). Off, every translation waits
+   * for a person to press Publish. Defaults to on.
+   */
   autoPublishMarketing: boolean;
 }
 
@@ -82,7 +87,7 @@ export const DEFAULT_STYLE_GUIDE: StyleGuide = { market: "es-US", register: "ust
 export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
   translatorModel: DEFAULT_TRANSLATOR_MODEL,
   reviewerModel: DEFAULT_REVIEWER_MODEL,
-  autoPublishMarketing: false,
+  autoPublishMarketing: true,
 };
 
 function text(value: unknown): string {
@@ -124,13 +129,26 @@ export function readEngineSettings(settings: Record<string, unknown> | null | un
   return {
     translatorModel: text(raw.translatorModel) || DEFAULT_ENGINE_SETTINGS.translatorModel,
     reviewerModel: text(raw.reviewerModel) || DEFAULT_ENGINE_SETTINGS.reviewerModel,
-    autoPublishMarketing: raw.autoPublishMarketing === true,
+    autoPublishMarketing: raw.autoPublishMarketing !== false,
   };
+}
+
+/** The emails allowed to approve legal text, lower case, blanks and duplicates dropped. */
+export function readLegalApprovers(settings: Record<string, unknown> | null | undefined, field: string = LEGAL_APPROVERS_FIELD): string[] {
+  const raw = settings?.[field];
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.map((v) => text(v).toLowerCase()).filter((v) => v !== ""))];
+}
+
+/** True when an email is on the approver list (case does not matter). */
+export function isLegalApprover(email: string | null | undefined, approvers: readonly string[]): boolean {
+  const normalised = text(email).toLowerCase();
+  return normalised !== "" && approvers.includes(normalised);
 }
 
 // ── Jobs and reports ────────────────────────────────────────────────────
 
-export type JobKind = "translate" | "estimate";
+export type JobKind = "translate" | "estimate" | "approve" | "send_back";
 export type JobMode = "full" | "changes";
 export type JobStatus = "pending" | "running" | "done" | "held" | "failed";
 
@@ -188,6 +206,23 @@ export interface TranslationReport {
   holdReasons: string[];
   /** True when the translation was written to the dataset as a draft. */
   saved: boolean;
+  /** The status the draft was given: `draft` when held, `awaiting_approval` with legal text pending, else `approved`. */
+  status?: "draft" | "awaiting_approval" | "approved";
+  /** Legal units on the document that are waiting for approval, and that carry approved wording. */
+  legalPending?: number;
+  legalApproved?: number;
+  /** True when the run published the translation (approved, and automatic publishing is on). */
+  published?: boolean;
+  /** Why the translation was not published, in plain words, when it was approved but stayed a draft. */
+  publishNote?: string;
+}
+
+/** What an approval job did. */
+export interface ApprovalOutcome {
+  unitId: string;
+  status: "approved" | "sent_back";
+  /** Every translation the decision touched. */
+  translations: { documentId: string; status: string; published: boolean; note?: string }[];
 }
 
 export interface CostEstimate {
@@ -225,6 +260,12 @@ export interface TranslationJob {
   sourceType?: string;
   /** The source documents of an estimate job. */
   sourceIds?: string[];
+  /** The registry entry an approval job decides on. */
+  unitId?: string;
+  /** The approver's comment. Required to send a unit back. */
+  comment?: string;
+  /** The signed-in Studio user who asked for the decision, as the Studio saw them. The route checks the job was created by this user. */
+  approver?: { id?: string; name?: string; email?: string };
   language: string;
   mode: JobMode;
   requestedBy?: string;
@@ -236,6 +277,7 @@ export interface TranslationJob {
   finishedAt?: string;
   report?: TranslationReport;
   estimate?: CostEstimate;
+  approval?: ApprovalOutcome;
   error?: JobError;
 }
 

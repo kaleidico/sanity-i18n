@@ -16,7 +16,7 @@ test("i18nPlugin is named kaleidico-i18n and registers the meta type for the tra
   });
   assert.equal(plugin.name, I18N_PLUGIN_NAME);
   assert.equal(I18N_PLUGIN_NAME, "kaleidico-i18n");
-  assert.deepEqual(plugin.schema.types.map((t) => t.name), [TRANSLATION_META_TYPE, "i18n.job", "i18n.secrets", "i18n.manifest"]);
+  assert.deepEqual(plugin.schema.types.map((t) => t.name), [TRANSLATION_META_TYPE, "i18n.job", "i18n.secrets", "i18n.manifest", "i18n.legalApproval"]);
   assert.deepEqual(plugin.i18n.languages.languages.map((l) => l.id), ["en", "es"]);
   assert.deepEqual(plugin.i18n.translatableTypes, ["page", "blogPost"]);
 
@@ -56,9 +56,9 @@ test("translation meta type is a hidden document linking a source to its languag
   assert.equal(meta.name, "i18n.translationMeta");
   assert.equal(meta.type, "document");
   assert.equal(meta.__experimental_omnisearch_visibility, false);
-  assert.deepEqual(meta.fields.map((f) => f.name), ["sourceType", "translations"]);
+  assert.deepEqual(meta.fields.map((f) => f.name), ["sourceType", "translations", "staleSince"]);
   const member = meta.fields[1].of[0];
-  assert.deepEqual(member.fields.map((f) => f.name), ["language", "document"]);
+  assert.deepEqual(member.fields.map((f) => f.name), ["language", "document", "staleSince"]);
   assert.equal(member.fields[1].weak, true);
   assert.throws(() => translationMetaType({ translatableTypes: [] }), /at least one document type/);
 });
