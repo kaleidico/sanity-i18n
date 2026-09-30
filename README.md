@@ -86,6 +86,7 @@ import { languages } from "./src/sanity/languages";
 export default defineConfig({
   // ...
   plugins: [
+    structureTool({ structure: deskStructure }),
     // ...your other plugins
     i18nPlugin({ languages, translatableTypes: ["page", "blogPost"] }),
   ],
@@ -93,6 +94,8 @@ export default defineConfig({
 ```
 
 `translatableTypes` lists the document types you wrap in the next section. It can start empty and grow as you wrap types.
+
+List `i18nPlugin()` after `structureTool()`. Sanity hands each plugin the actions the plugins before it registered, and the translation engine wraps the structure tool's Publish action; listed first, it would find no Publish action to wrap and its own "Translate to ..." action would become the main button.
 
 ### Reading the switches from the front end
 
@@ -342,7 +345,7 @@ export const { POST } = createTranslateRoute({
 });
 ```
 
-**4. The Studio plugin does the rest.** With `translatableTypes` set, `i18nPlugin()` adds a "Translate to <Language>" action to default-language documents, marks translations "Needs update" when the English is published, and adds a "Translations" tool. Pass `engine: { endpoint }` when the route is mounted somewhere else, or `engine: false` to leave all three out.
+**4. The Studio plugin does the rest.** With `translatableTypes` set, `i18nPlugin()` (listed after `structureTool()`) adds a "Translate to <Language>" action to default-language documents, marks translations "Needs update" when the English is published, and adds a "Translations" tool. Pass `engine: { endpoint }` when the route is mounted somewhere else, or `engine: false` to leave all three out.
 
 **5. Mark what is not copy.** The engine decides what is text from the schema, not from the value: `string` and `text` fields are text; fixed choices (`options.list`), URLs, emails, dates, numbers, booleans, references, slugs and files are not; images contribute only their own text fields such as `alt` and `caption`; plain strings named like plumbing (`href`, `ctaUrl`, `gtmId`, `icon`) are skipped. For a plain string the engine cannot tell apart from copy, such as a form field's machine `name`, wrap the field in `noTranslate()`. `options: { i18n: { translate: true } }` forces a field to be translated.
 
