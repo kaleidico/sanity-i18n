@@ -26,6 +26,8 @@ import type { FieldManifest } from "../core/manifest";
 import { getAtPath } from "../core/paths";
 import { sha256Hex } from "../core/sha256";
 import { I18N_FIELD, LANGUAGE_FIELD } from "../core/translations";
+import { dependencyReasons, type TranslationDependency } from "../core/dependencies";
+import { loadDependencies } from "./dependencies";
 import { EngineError } from "./errors";
 import type { SanityLike } from "./sanityHttp";
 
@@ -65,6 +67,19 @@ function legalRecordOf(doc: Json): LegalRecord | null {
 export interface PublishTranslationOptions {
   /** The field manifest. Defaults to the one the Studio keeps in `i18n.manifest`; without any, publishing is refused. */
   manifest?: FieldManifest | null;
+  /**
+   * Document types whose translation must be approved and live before a
+   * document that refers to them can be published. Defaults to `["form"]`: a
+   * page never goes live in a language its embedded form does not exist in.
+   * Pass an empty list to switch the rule off.
+   */
+  requiredDependencyTypes?: readonly string[];
+  /**
+   * After publishing, also publish the approved drafts in the same language
+   * that were only waiting for this document (a page waiting for its form).
+   * The engine passes true when automatic publishing is on.
+   */
+  publishDependents?: boolean;
   now?: () => Date;
 }
 
@@ -74,6 +89,10 @@ export interface PublishTranslationResult {
   id?: string;
   /** Why not, in plain words. */
   reason?: string;
+  /** The translatable documents this one refers to and how each stands in this language. */
+  dependencies?: TranslationDependency[];
+  /** Documents that were waiting for this one and were published with it. */
+  dependentsPublished?: string[];
 }
 
 /**
@@ -95,7 +114,10 @@ export async function publishTranslation(sanity: SanityLike, draftId: string, op
   const record = legalRecordOf(draft);
   const entries = await loadEntries(sanity, (record?.paths ?? []).map((p) => p.unitId));
   const check = checkTranslationForPublish(draft, manifest, entries);
-  if (!check.ok) return { published: false, reason: check.reasons.join(" ") };
+  const language = String(draft[LANGUAGE_FIELD] ?? "");
+  const dependencies = language ? await loadDependencies(sanity, draft, language, manifest, options.requiredDependencyTypes) : [];
+  const reasons = [...check.reasons, ...dependencyReasons(dependencies)];
+  if (reasons.length > 0) return { published: false, reason: reasons.join(" "), dependencies };
 
   const id = publishedId(draftId);
   const published = JSON.parse(JSON.stringify(draft)) as Json;
@@ -106,7 +128,29 @@ export async function publishTranslation(sanity: SanityLike, draftId: string, op
   i18n.publishedAt = now().toISOString();
   published[I18N_FIELD] = i18n;
   await sanity.mutate([{ createOrReplace: published }, { delete: { id: draftId } }]);
-  return { published: true, id };
+
+  const dependentsPublished: string[] = [];
+  if (options.publishDependents) {
+    // Approved drafts in this language that refer to the source of what was just published were waiting for it.
+    const sourceRef = ((draft[I18N_FIELD] as Json | undefined)?.source as { _ref?: string } | undefined)?._ref;
+    if (sourceRef) {
+      let waiting: string[] = [];
+      try {
+        waiting = await sanity.fetch<string[]>(
+          `*[_id in path("drafts.**") && ${LANGUAGE_FIELD} == $language && ${I18N_FIELD}.status == "approved" && references($source)]._id`,
+          { language, source: sourceRef },
+        );
+      } catch {
+        // Housekeeping: the documents stay approved drafts and can be published by hand.
+      }
+      for (const waitingId of waiting ?? []) {
+        if (waitingId === draftId) continue;
+        const result = await publishTranslation(sanity, waitingId, { ...options, manifest, publishDependents: false });
+        if (result.published && result.id) dependentsPublished.push(result.id);
+      }
+    }
+  }
+  return { published: true, id, dependencies, dependentsPublished };
 }
 
 // ── Decisions ────────────────────────────────────────────────────────────
@@ -121,6 +165,8 @@ export interface DecisionInput {
   settingsType?: string;
   engineField?: string;
   manifest?: FieldManifest | null;
+  /** See `PublishTranslationOptions.requiredDependencyTypes`. */
+  requiredDependencyTypes?: readonly string[];
   now?: () => Date;
 }
 
@@ -216,7 +262,7 @@ export async function approveUnit(input: DecisionInput): Promise<ApprovalOutcome
   if (becameApproved.length > 0 && (await autoPublishSetting(input))) {
     const manifest = input.manifest === undefined ? await readStoredManifest(sanity) : input.manifest;
     for (const draftId of becameApproved) {
-      const result = await publishTranslation(sanity, draftId, { manifest, now: input.now });
+      const result = await publishTranslation(sanity, draftId, { manifest, now: input.now, publishDependents: true, requiredDependencyTypes: input.requiredDependencyTypes });
       const row = outcome.translations.find((t) => t.documentId === publishedId(draftId));
       if (row) {
         row.published = result.published;

@@ -31,6 +31,7 @@ import type { FieldManifest } from "../core/manifest";
 import { I18N_FIELD, LANGUAGE_FIELD, TRANSLATION_META_TYPE, translationMetaId } from "../core/translations";
 import { countTokens, createAnthropicClient, type AnthropicLike, type CallPolicy, type Effort } from "./anthropic";
 import { reportForStorage, translateDocument } from "./document";
+import { loadDependencies } from "./dependencies";
 import { asEngineError, EngineError } from "./errors";
 import { estimateCost, type TokenCounter } from "./estimate";
 import { approveUnit, publishTranslation, sendBackUnit } from "./legal";
@@ -77,6 +78,11 @@ export interface EngineConfig {
   /** Time limit for a whole job, kept below the host's own limit so the job is always closed. Defaults to 270000. */
   deadlineMs?: number;
   retry?: CallPolicy["retry"];
+  /**
+   * Document types whose translation must be approved and live before a
+   * document that refers to them is published. Defaults to `["form"]`.
+   */
+  requiredDependencyTypes?: readonly string[];
   now?: () => Date;
 }
 
@@ -261,6 +267,8 @@ async function runTranslate(ctx: RunContext): Promise<{ status: JobStatus; repor
   report.legalPending = plan.legal.pending;
   report.legalApproved = plan.legal.approved;
   report.published = false;
+  // What this document needs in the same language before it can go live (a page needs its embedded form).
+  report.dependencies = await loadDependencies(sanity, translation, target.id, manifest, config.requiredDependencyTypes);
   i18n.report = reportForStorage(report);
 
   const mutations: Json[] = [{ createOrReplace: { ...translation, _id: `drafts.${targetId}`, _type: typeName } }, ...plan.mutations];
@@ -272,8 +280,9 @@ async function runTranslate(ctx: RunContext): Promise<{ status: JobStatus; repor
   const autoPublish = config.autoPublish ?? readEngineSettings(settings, config.settings?.engineField ?? ENGINE_FIELD).autoPublishMarketing;
   if (status === "approved" && autoPublish) {
     await ctx.progress("Publishing");
-    const result = await publishTranslation(sanity, `drafts.${targetId}`, { manifest, now: config.now });
+    const result = await publishTranslation(sanity, `drafts.${targetId}`, { manifest, now: config.now, publishDependents: true, requiredDependencyTypes: config.requiredDependencyTypes });
     report.published = result.published;
+    if (result.dependentsPublished?.length) report.dependentsPublished = result.dependentsPublished;
     if (!result.published && result.reason) report.publishNote = result.reason;
     if (result.published) {
       // The report on the published document says so too.
@@ -309,6 +318,7 @@ async function runApproval(ctx: RunContext): Promise<ApprovalOutcome> {
     settingsType: config.settings?.type,
     engineField: config.settings?.engineField,
     manifest: config.manifest,
+    requiredDependencyTypes: config.requiredDependencyTypes,
     now: config.now,
   };
   await ctx.progress(job.kind === "approve" ? "Approving" : "Sending back");

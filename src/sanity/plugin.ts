@@ -83,7 +83,7 @@ export const i18nPlugin = definePlugin<I18nPluginConfig>((config) => {
   const wrap = (action: DocumentActionComponent) => {
     let wrapped = wrappedPublish.get(action);
     if (!wrapped) {
-      wrapped = publishTranslationAction(publishWithStaleCheck(action, { languages }), { languages, labels: config.labels });
+      wrapped = publishTranslationAction(publishWithStaleCheck(action, { languages }), { languages, labels: config.labels, translatableTypes: config.translatableTypes });
       wrappedPublish.set(action, wrapped);
     }
     return wrapped;

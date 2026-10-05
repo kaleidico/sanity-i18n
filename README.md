@@ -6,7 +6,7 @@ Multi-language content for Sanity and Next.js sites. One package, three parts:
 2. **Next.js kit** (`@kaleidico/sanity-i18n/next`): locale routing under a prefix such as `/es`, hreflang and canonical tags, sitemap alternates, a language switcher and a UI dictionary.
 3. **Translation engine** (`@kaleidico/sanity-i18n/engine`, server only): translates documents with the client's own Anthropic API key, applying a glossary, a style guide, exact-match checks and a reviewer pass, and publishes under a review rule: marketing copy goes live when both checks pass, legal text waits for a named approver.
 
-Version 0.5.0 ships all three: the Sanity plugin (the Languages tab and the document-level content model: a document per language, linked to the source, with shared fields, per-language slugs, a status per document and legal marks), the Next.js kit (locale routing, hreflang and canonical tags, Open Graph locales, sitemap alternates, the language switcher, the suggestion strip and the UI dictionary) and the translation engine (whole-document translation, glossary and style guide, two checks, change tracking, a cost estimate, and the review and approval workflow: a legal approval registry, the approval queue, the publish rule and re-locking when the English changes).
+Version 0.6.0 ships all three, plus forms in the visitor's language with a consent record and a notice before an English-only application (see "Forms and consent"): the Sanity plugin (the Languages tab and the document-level content model: a document per language, linked to the source, with shared fields, per-language slugs, a status per document and legal marks), the Next.js kit (locale routing, hreflang and canonical tags, Open Graph locales, sitemap alternates, the language switcher, the suggestion strip and the UI dictionary) and the translation engine (whole-document translation, glossary and style guide, two checks, change tracking, a cost estimate, and the review and approval workflow: a legal approval registry, the approval queue, the publish rule and re-locking when the English changes).
 
 ## Requirements
 
@@ -20,7 +20,7 @@ Version 0.5.0 ships all three: the Sanity plugin (the Languages tab and the docu
 Until the package is on npm, install it from the release tag on GitHub. Each tag carries the built `dist/` folder.
 
 ```bash
-npm install github:kaleidico/sanity-i18n#v0.5.0
+npm install github:kaleidico/sanity-i18n#v0.6.0
 ```
 
 Once published:
@@ -413,7 +413,7 @@ Review model: marketing copy may go live on its own once the two checks pass; le
 | The English legal wording changes | draft `awaiting_approval`, `staleSince` set; the published translation is untouched | the live page keeps its last approved wording |
 | Other English text changes | draft `needs_update`, `staleSince` set; the published translation is untouched | the live page is unchanged |
 
-A translation can only be published, by the engine or by a person, when its status is `approved`, it is not held, no legal unit on it is waiting, and every legal path carries the approved wording word for word. `publishTranslation(sanity, draftId)` applies the rule on the server and refuses with a plain reason; the plugin wraps the Studio's Publish action on translations (`publishTranslationAction`) so the button is disabled with the same reason. Publishing is Sanity's own: the draft replaces the published document and is removed. A hand edit to approved legal text needs a new approval before the page can be published again.
+A translation can only be published, by the engine or by a person, when its status is `approved`, it is not held, no legal unit on it is waiting, every legal path carries the approved wording word for word, and every form it embeds is approved and live in the same language (see "Forms and consent"). `publishTranslation(sanity, draftId)` applies the rule on the server and refuses with a plain reason; the plugin wraps the Studio's Publish action on translations (`publishTranslationAction`) so the button is disabled with the same reason. Publishing is Sanity's own: the draft replaces the published document and is removed. A hand edit to approved legal text needs a new approval before the page can be published again.
 
 The site reads only `i18n.status == "approved"` translations (`localeFilter` plus that clause, as in the Next.js kit), so a page with legal text waiting is held, never shown with English in its place.
 
@@ -460,6 +460,100 @@ What this does and does not guarantee: an editor who is not on the list cannot a
 
 To add an approver: open Site Settings, Languages, and add the email to "Legal approvers". To remove one, delete it. No redeploy is needed.
 
+## Forms and consent
+
+A form in another language is the linked translation of the default-language form document, like any other translatable type. What makes forms different is that a submission is read by machines and kept as a record, so three rules apply.
+
+### 1. Words from the translation, machine values from the default language
+
+`localizeForm(source, translation)` (from `/next`, pure) builds the form a page renders:
+
+| Part of the form | Read from |
+| --- | --- |
+| Field labels, placeholders, help text, tooltips, section headings, step labels, HTML and rich text content, consent wording, option labels | the translation (falling back to the default language where the translation is empty) |
+| Field `name`s, option `value`s, conditions, `required`, widths, validation settings, field order | the default-language form, always |
+| `settings` text keys: `submitButtonText`, `nextButtonText`, `backButtonText`, `successMessage` (`FORM_TEXT_SETTINGS`) | the translation |
+| Every other `settings` key (step mode, progress style, redirect, cookie) | the default-language form |
+| `notifications`, `stepRouting` | the default-language form (list them in `sharedFields`) |
+
+A field is matched to its translation by `_key`, an option by `_key` (or by position when a hand-made translation lost its keys). A field with no `name` gets the one made from its default-language label, so a submission in Spanish carries exactly the keys and values an English one does: the visitor picks "Comprar una casa" and `purchase` is submitted. `optionLabel(field, value)` reads a stored value back as the label in either language.
+
+The settings rule in a sentence: `settings` stays one object and is **not** a shared field; on a translation only its text keys are read, everything else comes from the default-language form. Mark the machine strings in it (`redirectUrl`, `cookieName`) with `noTranslate()`, and lock the behaviour fields on translations in the schema so nobody edits a value that would be ignored.
+
+The returned form carries `i18nForm`: `{ language, documentId, revision, sourceId, sourceSlug }`. The page posts to the default-language form's address (`sourceSlug`) and sends `language` (the page's, never the browser's) and `formVersion: { id: documentId, rev: revision }`. Do not hand `notifications` to a client component: project the form without it and load destinations in the route.
+
+### 2. A page waits for its form
+
+A page in Spanish whose form has no approved Spanish translation must not show an English form. Two things enforce it:
+
+- **On the site:** resolve the form by language and render nothing when there is no approved translation (`*[_type == "form" && language == $lang && i18n.status == "approved" && i18n.source._ref == $id]`). A standalone form page follows the usual rule and is a 404.
+- **In the tooling:** "this page embeds form X" is a dependency. Every translation run reports `dependencies[]`: each translatable document the page refers to, with `{ id, type, translationId, status, blocking }`, where `status` is `approved`, `missing` (not translated), `unpublished` (a draft only) or the published translation's status. `publishTranslation()` refuses to publish while a dependency is `blocking`, with a plain reason ("It embeds the form form-contact, which has no translation yet. Translate and approve that form first."), and the Studio's Publish button is disabled with the same words. By default only `form` blocks (`requiredDependencyTypes`, an option of `publishTranslation`, both routes and `publishTranslationAction`); other references are listed for information. When automatic publishing is on, publishing the form also publishes the approved pages that were only waiting for it (`dependentsPublished` in the report).
+
+Translate forms before the pages that embed them.
+
+### 3. The consent record
+
+Consent wording (`legalText()` on a consent field's label and consent text) is legal text, so it goes through the approval queue like every other legal unit, one unit per paragraph. With each submission, record what the visitor agreed to:
+
+```ts
+import { buildConsentRecords, submissionWebhookFields } from "@kaleidico/sanity-i18n/next";
+
+const consents = buildConsentRecords({
+  shown,    // the form document the visitor saw, at the revision they saw (the translation, with its i18n.legal record)
+  source,   // the default-language form
+  data,     // the submitted values
+  language, // the page's language
+});
+// [{ field: "consent", checked: true, textAsShown: "Al marcar esta casilla...", language: "es",
+//    legalApprovalId: "i18n-legal-es-661486444067", legalApprovalIds: ["i18n-legal-es-661486444067"] }]
+```
+
+- `textAsShown` is the plain text of the wording beside the checkbox, read from `shown`. Load `shown` at the revision in `formVersion` (Sanity's history API, `/data/history/<dataset>/documents/<id>?revision=<rev>`, when the document has moved on), so the record is what was on screen and not what replaced it.
+- `legalApprovalId` is the registry entry that approved that wording, read from the translation's own `i18n.legal.paths`; `legalApprovalIds` lists one per paragraph. In the default language both are empty: no approval is needed there.
+- Consent fields hidden by a condition are left out. `consentWordingApproved(shown)` says whether every consent field's wording on a translation is recorded as approved.
+
+`submissionWebhookFields(language, consents)` returns `{ language, consent_text }` to spread beside a webhook payload's existing keys; nothing is renamed or removed. Keep the staff notification in the language staff read, state the submission language near the top, and quote `textAsShown` in its original language.
+
+Where the submission is stored is the site's choice. If it is stored in a public dataset, give the document an id with a period in it (`form.submission.<uuid>`): Sanity never returns such a document without a token.
+
+### The notice before an English-only application
+
+When a link leads to something that exists in the default language only (an online loan application), a visitor on a translated page should be told before they follow it.
+
+```ts
+// Site Settings, in the Languages group. Not a shared field.
+applyNoticeField({ defaultAppliesTo: ["apply.example.com"] }),
+```
+
+The field is an object: `enabled`, `appliesTo` (host names; a leading `*.` covers subdomains), `title`, `body`, `continueLabel`, `cancelLabel`. The switch and the hosts are read from the default-language settings document. The wording is written in the default language as the source and translated like any other text; `body` is legal text, so its translation waits in the approval queue. Default-language pages never show the notice, whatever is typed there.
+
+```tsx
+// In the language layout, once.
+import { resolveApplyNotice, applyNoticeHideCss } from "@kaleidico/sanity-i18n/next";
+import { ExternalApplyNotice } from "@kaleidico/sanity-i18n/next/client";
+
+const resolved = resolveApplyNotice({ lang, base, local, approvals, defaultAppliesTo: ["apply.example.com"] });
+// base: the default-language settings' i18nApplyNotice
+// local: the published, approved settings document in `lang`, with its i18n record
+// approvals: the registry entries named on local.i18n.legal.paths
+
+{resolved.state === "blocked" && <style>{applyNoticeHideCss(resolved.hosts)}</style>}
+{resolved.state !== "off" && <ExternalApplyNotice lang={lang} defaultId="en" state={resolved.state} hosts={resolved.hosts} notice={resolved.notice} classNames={...} />}
+```
+
+The rule `resolveApplyNotice()` applies, which is a compliance rule and deliberately strict:
+
+| Page | Notice | What happens to links to the listed hosts |
+| --- | --- | --- |
+| Default language | any | Nothing. No dialog, links untouched. |
+| Another language | switched off (`enabled: false`) | Nothing. Links untouched. |
+| Another language | on, wording approved in that language | `active`: a click opens the dialog first. |
+| Another language | on, no approved wording in that language | `blocked`: the links are hidden. |
+
+"Approved" means all of: the settings document in that language is published with status `approved`, its legal record lists `i18nApplyNotice.body` as approved, and the registry entry it names is approved with the same words. An unset switch counts as on, so forgetting to set it cannot open the door. In the `blocked` state no wording leaves the server; `applyNoticeHideCss()` hides the links before any script runs and the component then removes them from the page. Sending a visitor to a default-language application with no notice is the one thing this exists to prevent, so the safe state is no link.
+
+`ExternalApplyNotice` works for server-rendered links without wrapping each one: a single delegated listener (capture phase, `click` and `auxclick`) matches a link's host with `matchesApplyHost()`. The dialog has `role="dialog"`, `aria-modal`, a label and a description, traps focus, closes on Escape, Cancel or a click outside, and returns focus to the link. Continue is a real link with the original `href` and `target`. Style it with `classNames` (`overlay`, `dialog`, `title`, `body`, `actions`, `continue`, `cancel`); without them it has plain inline styles.
+
 ## What switching a language on does, and does not do
 
 Switching a language on in Site Settings **publishes nothing by itself**. It tells the site that the language exists, so the rest of this package can offer it: a translation can be started for a page, the routing can reserve the `/es` prefix, and the switcher can list it. A page in that language only appears on the live site once it has been translated and its translation is approved, which the engine does on its own for a page without legal text when automatic publishing is on.
@@ -504,6 +598,9 @@ The default language cannot be switched off. Every translation is made from it.
 | `buildAlternates({ siteUrl, lang, defaultId?, path, translations? })` | `Metadata.alternates`: self canonical plus reciprocal hreflang with `x-default`. |
 | `openGraphLocale(lang, others?)`, `inLanguage(lang)`, `languageTag(lang)`, `localePath(lang, path)`, `localeUrl(siteUrl, lang, path)` | Locale tags and per-language URLs. |
 | `createDictionary({ en, es, ... })`, `interpolate` | The typed UI dictionary with `t(lang, key, vars?)`. |
+| `localizeForm(source, translation?, options?)`, `formFieldName(field)`, `optionLabel(field, value)`, `portableTextToPlain(value)`, `FORM_TEXT_SETTINGS`, `FORM_FIELD_TEXT_KEYS` | The form a page renders in a language: the translation's words over the default-language form's machine values. |
+| `buildConsentRecords(input)`, `consentText(records)`, `submissionWebhookFields(language, records)`, `consentWordingApproved(shown)` | The consent record of a submission and the two keys it adds to a webhook payload. |
+| `resolveApplyNotice(input)`, `matchesApplyHost(href, hosts, base?)`, `hostMatches`, `linkHost`, `normaliseHostPatterns`, `applyNoticeHideCss(hosts)`, `APPLY_NOTICE_FIELD` | The notice before an English-only application: the gating rule, the host matcher and the hide rule. |
 | `LanguageSwitcher`, `switcherHref` | The server-renderable switcher. |
 
 `@kaleidico/sanity-i18n/next/middleware`
@@ -517,6 +614,7 @@ The default language cannot be switched off. Every translation is made from it.
 | Export | What it is |
 | --- | --- |
 | `LanguageSuggestion` | The client-side "Ver en español" strip. |
+| `ExternalApplyNotice` | The dialog shown before a link to a default-language-only application, or the removal of those links while the notice has no approved wording. |
 | `pickSuggestedLanguage(preferred, languages, defaultId)` | Which enabled language the browser's preference list points at. |
 
 `@kaleidico/sanity-i18n/sanity`, translation engine
@@ -534,6 +632,8 @@ The default language cannot be switched off. Every translation is made from it.
 | `LEGAL_APPROVAL_TYPE`, `legalApprovalId(language, hash)`, `legalSourceHash(text)`, `normaliseLegalText(text)`, `unitText(value)`, `legalUnitsOf(doc, manifest)`, `planLegalRegistry(input)`, `statusAfterRun(held, legal)`, `checkTranslationForPublish(doc, manifest, entries)`, `planStaleTranslations(input)`, `applyLegalValue(doc, segments, value)`, `parseLegalValue(entry)` | The registry model and the pure functions behind the queue, the publish rule and the stale check. The same functions are exported from `/engine`. |
 | `readLegalApprovers(settings)`, `isLegalApprover(email, list)`, `LEGAL_APPROVERS_FIELD`, `useLegalApprovers(client, options)` | The approver list. |
 | `noTranslate(field)` | Marks a field as never translated. |
+| `applyNoticeField({ name?, group?, defaultAppliesTo? })` | The Site Settings object for the notice before an English-only application. Not a shared field. |
+| `collectReferences(doc)`, `planDependencies(input)`, `dependencyReasons(dependencies)`, `DEFAULT_REQUIRED_DEPENDENCY_TYPES` | What a translation depends on in the same language, as the Publish button checks it. |
 | `buildFieldManifest(schema, types)`, `ensureManifest(client, schema, options)` | Build the field manifest from a compiled schema, and store it for the server. |
 | `diffSource`, `extractUnits`, `sourceHashes` | Change tracking, the same functions the server uses. |
 | `I18N_HIDDEN_TYPES` | The package's bookkeeping document types, to leave out of desk lists. |
@@ -551,7 +651,9 @@ The default language cannot be switched off. Every translation is made from it.
 | Export | What it is |
 | --- | --- |
 | `runJob(config, jobId, allowedKinds?)` | What the routes do: claim a pending job, run it, write the result. |
-| `publishTranslation(sanity, draftId, { manifest? })` | Publish a translation draft under the rule, or refuse with a plain reason. |
+| `publishTranslation(sanity, draftId, { manifest?, requiredDependencyTypes?, publishDependents? })` | Publish a translation draft under the rule, or refuse with a plain reason. Refuses a page whose embedded form has no approved, live translation. |
+| `loadDependencies(sanity, document, language, manifest, requiredTypes?)` | The translatable documents a document refers to and how each stands in that language. |
+| `localizeForm`, `buildConsentRecords`, `submissionWebhookFields`, `resolveApplyNotice` and the other form and notice functions listed under `/next` | Shared with the site. |
 | `approveUnit(input)`, `sendBackUnit(input)` | The two decisions, as the approval route performs them. |
 | `readLegalApprovers`, `isLegalApprover`, and the registry functions listed under `/sanity` | Shared with the Studio. |
 | `translateDocument(input)` | One document: choose the units, translate, run both checks, build the draft. No dataset access. |
@@ -571,6 +673,7 @@ The default language cannot be switched off. Every translation is made from it.
 - **Part 3, Next.js kit:** shipped in 0.3.0 (see Next.js kit).
 - **Part 4, translation engine:** shipped in 0.4.0 (see Translation engine).
 - **Part 5, review workflow:** shipped in 0.5.0 (see Review and approval).
+- **Part 6, forms and consent:** shipped in 0.6.0 (see Forms and consent).
 
 ## Security
 

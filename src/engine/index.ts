@@ -61,6 +61,21 @@ export {
   type StalePlan,
   type StaleMark,
 } from "../core/legal";
+export { loadDependencies } from "./dependencies";
+export { collectReferences, planDependencies, dependencyReasons, DEFAULT_REQUIRED_DEPENDENCY_TYPES, type TranslationDependency, type DependencyPlanInput } from "../core/dependencies";
+export {
+  localizeForm,
+  formFieldName,
+  portableTextToPlain,
+  buildConsentRecords,
+  consentText,
+  submissionWebhookFields,
+  consentWordingApproved,
+  optionLabel,
+  FORM_TEXT_SETTINGS,
+  type ConsentRecord,
+} from "../core/forms";
+export { resolveApplyNotice, matchesApplyHost, applyNoticeHideCss, APPLY_NOTICE_FIELD, type ResolvedApplyNotice } from "../core/applyNotice";
 export { estimateCost, tokensFromCharacters, type EstimateCostInput, type TokenCounter } from "./estimate";
 export { translateUnits, chunkUnits, translatorRequestPreview, DEFAULT_MAX_CHARS_PER_REQUEST, type TranslateUnitsInput, type TranslateUnitsResult } from "./translate";
 export { reviewTranslation, parseReviewerResponse, reviewerRequest, type ReviewInput, type ReviewResult } from "./review";

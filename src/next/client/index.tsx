@@ -2,12 +2,17 @@
 /**
  * @kaleidico/sanity-i18n/next/client
  *
- * The one client component in the kit: a small, dismissible strip that
- * suggests the visitor's own language when the browser prefers a language the
- * site has and the page is in the default language. It never redirects.
+ * The client components of the kit: a small, dismissible strip that suggests
+ * the visitor's own language when the browser prefers a language the site
+ * has and the page is in the default language (it never redirects), and the
+ * notice shown before a link to something that exists in the default
+ * language only (`ExternalApplyNotice`).
  */
 import { useEffect, useState } from "react";
 import type { Language } from "../../core/languages";
+
+export { ExternalApplyNotice, type ExternalApplyNoticeProps, type ExternalApplyNoticeClassNames } from "./ExternalApplyNotice";
+export { matchesApplyHost, hostMatches, linkHost } from "../../core/hosts";
 
 export interface LanguageSuggestionLabels {
   /** The message, in the suggested language: "Este sitio está disponible en español." */

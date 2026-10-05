@@ -163,6 +163,11 @@ export function memorySanity(documents = [], options = {}) {
           .filter((s) => typeof s === "string" && s.startsWith(params.slug));
       }
       if (query.includes("finishedAt <")) return [];
+      if (query.includes("references($source)")) {
+        return [...store.values()]
+          .filter((d) => d._id.startsWith("drafts.") && d.language === params.language && d.i18n?.status === "approved" && JSON.stringify({ ...d, i18n: undefined }).includes(`"_ref":"${params.source}"`))
+          .map((d) => d._id);
+      }
       if (query.includes("_type == $type")) {
         return [...store.values()].find((d) => d._type === params.type && !d._id.startsWith("drafts.") && (!d.language || d.language === params.lang)) ?? null;
       }

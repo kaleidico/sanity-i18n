@@ -4,6 +4,7 @@
  * or Node import, so both sides share it.
  */
 import type { CheckFinding } from "./check";
+import type { TranslationDependency } from "./dependencies";
 import { DEFAULT_REVIEWER_MODEL, DEFAULT_TRANSLATOR_MODEL } from "./pricing";
 
 // ── Private documents ───────────────────────────────────────────────────
@@ -215,6 +216,14 @@ export interface TranslationReport {
   published?: boolean;
   /** Why the translation was not published, in plain words, when it was approved but stayed a draft. */
   publishNote?: string;
+  /**
+   * The translatable documents this one refers to (an embedded form, a linked
+   * page) and how each stands in this language. One marked `blocking` keeps
+   * this document from being published until it is approved and live.
+   */
+  dependencies?: TranslationDependency[];
+  /** Documents that were waiting for this one and were published with it. */
+  dependentsPublished?: string[];
 }
 
 /** What an approval job did. */

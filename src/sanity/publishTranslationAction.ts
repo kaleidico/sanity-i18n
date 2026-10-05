@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useClient, useSchema, type DocumentActionComponent, type DocumentActionProps } from "sanity";
 import type { LanguagesConfig } from "../core/languages";
 import { checkTranslationForPublish, LEGAL_APPROVAL_TYPE, type LegalApproval, type PublishCheck } from "../core/legal";
+import { collectReferences, dependencyReasons, planDependencies, DEFAULT_REQUIRED_DEPENDENCY_TYPES } from "../core/dependencies";
+import { translationId } from "../core/engineModel";
 import { buildFieldManifest } from "../core/manifest";
 import { LANGUAGE_FIELD, I18N_FIELD, type TranslationLabels } from "../core/translations";
 import { STUDIO_API_VERSION } from "./ApiKeyInput";
@@ -9,6 +11,10 @@ import { STUDIO_API_VERSION } from "./ApiKeyInput";
 export interface PublishTranslationActionOptions {
   languages: LanguagesConfig;
   labels?: TranslationLabels;
+  /** Every translatable document type, so a reference to one is recognised as a dependency. */
+  translatableTypes?: readonly string[];
+  /** Types whose translation must be approved and live before a document that refers to them can be published. Defaults to `["form"]`. */
+  requiredDependencyTypes?: readonly string[];
 }
 
 type Json = Record<string, unknown>;
@@ -18,8 +24,9 @@ type Json = Record<string, unknown>;
  * than the default) can only be published under the rule: its status is
  * Approved, it is not held by the reviewer, no legal text on it is waiting
  * for approval, and every legal path carries the approved wording word for
- * word. Otherwise Publish is disabled and its tooltip says why. English
- * documents are left exactly as they were.
+ * word, and every form it embeds is approved and live in the same language.
+ * Otherwise Publish is disabled and its tooltip says why. English documents
+ * are left exactly as they were.
  */
 export function publishTranslationAction(original: DocumentActionComponent, options: PublishTranslationActionOptions): DocumentActionComponent {
   const defaultId = options.languages.defaultLanguage.id;
@@ -48,7 +55,30 @@ export function publishTranslationAction(original: DocumentActionComponent, opti
         const entries = new Map(docs.map((d) => [d._id, d]));
         const manifest = buildFieldManifest(schema, [props.type], { defaultLanguage: defaultId });
         const result = checkTranslationForPublish(draft, manifest, entries, { labels: options.labels });
-        if (alive) setCheck(result);
+
+        // What it depends on in the same language: an embedded form must be approved and live first.
+        const required = options.requiredDependencyTypes ?? DEFAULT_REQUIRED_DEPENDENCY_TYPES;
+        const refs = required.length > 0 ? collectReferences(draft) : [];
+        let reasons = result.reasons;
+        if (refs.length > 0) {
+          const types = [...new Set([props.type, ...(options.translatableTypes ?? []), ...required])].filter((t) => schema.get(t));
+          const wide = buildFieldManifest(schema, types, { defaultLanguage: defaultId });
+          const targets = await client.fetch<Json[]>(`*[_id in $ids]{ _id, _type, ${LANGUAGE_FIELD} }`, { ids: refs });
+          const translationIds = targets.map((t) => translationId(String(t._id), String(language)));
+          const found = translationIds.length > 0 ? await client.fetch<Json[]>(`*[_id in $ids]{ _id, ${I18N_FIELD}{ status } }`, { ids: [...translationIds, ...translationIds.map((id) => `drafts.${id}`)] }) : [];
+          const translated = found.filter((t) => !String(t._id).startsWith("drafts."));
+          const dependencies = planDependencies({
+            document: draft,
+            language: String(language),
+            manifest: wide,
+            referenced: new Map(targets.map((t) => [String(t._id), t])),
+            translations: new Map(translated.map((t) => [String(t._id), t])),
+            drafts: new Set(found.filter((t) => String(t._id).startsWith("drafts.")).map((t) => String(t._id).slice("drafts.".length))),
+            requiredTypes: required,
+          });
+          reasons = [...reasons, ...dependencyReasons(dependencies)];
+        }
+        if (alive) setCheck({ ok: reasons.length === 0, reasons });
       };
       run().catch(() => {
         if (alive) setCheck({ ok: false, reasons: ["The legal text on this translation could not be checked. Try again in a moment."] });

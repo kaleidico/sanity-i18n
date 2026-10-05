@@ -103,6 +103,9 @@ export { translateAction, JobOutcomeView, type TranslateActionOptions } from "./
 
 export { publishWithStaleCheck, staleToast, type PublishWithStaleCheckOptions } from "./publishWithStaleCheck";
 
+export { applyNoticeField, type ApplyNoticeFieldOptions } from "./applyNoticeField";
+export { APPLY_NOTICE_FIELD, resolveApplyNotice, matchesApplyHost } from "../core/applyNotice";
+export { collectReferences, planDependencies, dependencyReasons, DEFAULT_REQUIRED_DEPENDENCY_TYPES, type TranslationDependency } from "../core/dependencies";
 export { publishTranslationAction, type PublishTranslationActionOptions } from "./publishTranslationAction";
 
 export { legalApprovalsTool, resubmitLegalUnit, buildLog, LEGAL_APPROVER_NOTICE, type LegalApprovalsToolOptions } from "./LegalApprovalsTool";

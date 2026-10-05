@@ -69,3 +69,36 @@ export {
 } from "./dictionary";
 
 export { LanguageSwitcher, switcherHref, type LanguageSwitcherProps } from "./switcher";
+
+export {
+  localizeForm,
+  formFieldName,
+  portableTextToPlain,
+  buildConsentRecords,
+  consentText,
+  submissionWebhookFields,
+  consentWordingApproved,
+  optionLabel,
+  FORM_TEXT_SETTINGS,
+  FORM_FIELD_TEXT_KEYS,
+  CONSENT_FIELD_TYPE,
+  type ConsentRecord,
+  type ConsentRecordInput,
+  type LocalizeFormOptions,
+  type LocalizedFormMeta,
+} from "../core/forms";
+
+export {
+  resolveApplyNotice,
+  matchesApplyHost,
+  hostMatches,
+  linkHost,
+  normaliseHostPatterns,
+  applyNoticeHideCss,
+  APPLY_NOTICE_FIELD,
+  type ApplyNoticeValue,
+  type ApplyNoticeText,
+  type ApplyNoticeState,
+  type ResolvedApplyNotice,
+  type ResolveApplyNoticeInput,
+} from "../core/applyNotice";
